@@ -1,0 +1,53 @@
+# tcs-reference is intentionally stored outside this Git repository.
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+secrets/
+credentials/
+
+# Java and Maven
+target/
+*.class
+.mvn/timing.properties
+
+# Node, Next.js, and frontend builds
+node_modules/
+.next/
+dist/
+build/
+coverage/
+playwright-report/
+test-results/
+
+# Claude Code local files
+CLAUDE.local.md
+.claude/settings.local.json
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
