@@ -33,7 +33,7 @@ public class ExchangeController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Create an exchange")
     public ResponseEntity<ExchangeResponse> create(@Valid @RequestBody CreateExchangeRequest request,
                                                    UriComponentsBuilder uriBuilder) {
@@ -57,7 +57,7 @@ public class ExchangeController {
     }
 
     @PutMapping("/{mic}")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Update an exchange")
     public ExchangeResponse update(@PathVariable String mic, @Valid @RequestBody UpdateExchangeRequest request) {
         return referenceData.updateExchange(mic, request.name(), request.country(), request.timezone());

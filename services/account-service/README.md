@@ -35,7 +35,7 @@ the API contract of record and `docs/adr/ADR-0002` for the service-boundary deci
 - `POST /internal/v1/accounts/batch` returns an independent verdict per item (existence, status,
   optional cash sufficiency, optional security sufficiency) — one bad account never fails the
   batch. Read-only and side-effect-free; cross-owner (no investor masking); requires a service
-  scope (`account:balance` or `allocation:process`).
+  machine scope (`account:validate` or `allocation:process`, not granted to admin-web).
 
 ## Authorization matrix
 
@@ -48,7 +48,7 @@ the API contract of record and `docs/adr/ADR-0002` for the service-boundary deci
 | `GET /api/v1/accounts/{id}/balances` | `account:balance` | owner or ADMIN |
 | `POST\|GET /api/v1/accounts/{id}/cash-transactions` | `account:balance` | owner or ADMIN |
 | `POST\|GET /api/v1/accounts/{id}/security-transactions` | `account:balance` | owner or ADMIN |
-| `POST /internal/v1/accounts/batch` | `account:balance` **or** `allocation:process` | machine (cross-owner) |
+| `POST /internal/v1/accounts/batch` | `account:validate` **or** `allocation:process` (machine-only) | machine (cross-owner) |
 
 Unowned resources answer **404** (existence is never revealed); missing/invalid tokens 401 and
 missing scope/role 403, all in the same RFC 7807 problem shape with `errorCode` and

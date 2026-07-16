@@ -16,7 +16,7 @@ tags:
   - name: accounts
   - name: ledger
   - name: machine
-    description: M2M endpoints (scope account:balance or allocation:process)
+    description: M2M endpoints (scope account:validate or allocation:process)
 paths:
   /api/v1/accounts:
     post:
@@ -139,7 +139,7 @@ paths:
     post:
       tags: [machine]
       summary: Batch account existence/status/sufficiency validation (per-item verdicts)
-      description: Requires scope account:balance or allocation:process. Read-only, cross-owner.
+      description: Requires machine scope account:validate or allocation:process (not granted to admin-web). Read-only, cross-owner.
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/AccountBatchValidationRequest' } } }

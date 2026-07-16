@@ -19,9 +19,9 @@ public final class AccountTestTokens {
     public static final String AUDIENCE = "account-service";
     public static final String USER_SCOPES = "account:admin account:balance";
     /** allocation-engine machine client: cross-owner reads + validation. */
-    public static final String ALLOCATION_SCOPES = "allocation:process account:balance";
-    /** trading-service machine client: balance scope only (no admin, no allocation:process). */
-    public static final String TRADING_SCOPES = "account:balance enrichment:read";
+    public static final String ALLOCATION_SCOPES = "allocation:process account:validate account:balance";
+    /** trading-service machine client: batch-validation scope (no admin, no allocation:process). */
+    public static final String TRADING_SCOPES = "account:validate account:balance enrichment:read";
 
     private AccountTestTokens() {
     }

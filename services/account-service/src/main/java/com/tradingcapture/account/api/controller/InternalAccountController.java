@@ -15,10 +15,11 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Machine-facing batch account validation for allocation-engine and trading-service. Read-only
- * and side-effect-free; each item gets an independent verdict. Requires a service scope
- * ({@code account:balance} or {@code allocation:process}) — enforced both at the filter chain
- * ({@code /internal/**}) and here for defense in depth. This is a cross-owner endpoint and does
- * not apply investor ownership masking.
+ * and side-effect-free; each item gets an independent verdict. Requires a dedicated machine
+ * scope ({@code account:validate} or {@code allocation:process}) — enforced both at the filter
+ * chain ({@code /internal/**}) and here for defense in depth. That scope is not granted to the
+ * admin-web user client, so investor user tokens cannot reach this cross-owner endpoint (which
+ * does not apply investor ownership masking).
  */
 @RestController
 @RequestMapping("/internal/v1/accounts")
@@ -32,7 +33,7 @@ public class InternalAccountController {
     }
 
     @PostMapping("/batch")
-    @PreAuthorize("hasAnyAuthority('SCOPE_account:balance', 'SCOPE_allocation:process')")
+    @PreAuthorize("hasAnyAuthority('SCOPE_account:validate', 'SCOPE_allocation:process')")
     @Operation(summary = "Batch account existence/status/sufficiency validation (per-item results)")
     @ApiResponse(responseCode = "200", description = "Per-item verdicts")
     @ApiResponse(responseCode = "400", description = "Validation failure")

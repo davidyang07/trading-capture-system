@@ -40,7 +40,7 @@ public class FeeRuleController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Create a fee rule")
     public ResponseEntity<FeeRuleResponse> create(@Valid @RequestBody CreateFeeRuleRequest request,
                                                   UriComponentsBuilder uriBuilder) {
@@ -72,21 +72,21 @@ public class FeeRuleController {
     }
 
     @PutMapping("/{feeRuleId}")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Update a fee rule")
     public FeeRuleResponse update(@PathVariable String feeRuleId, @Valid @RequestBody UpdateFeeRuleRequest request) {
         return feeRuleService.update(feeRuleId, request.toCommand());
     }
 
     @PostMapping("/{feeRuleId}/activate")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Activate a fee rule")
     public FeeRuleResponse activate(@PathVariable String feeRuleId) {
         return feeRuleService.setStatus(feeRuleId, ActivationStatus.ACTIVE);
     }
 
     @PostMapping("/{feeRuleId}/deactivate")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Deactivate a fee rule")
     public FeeRuleResponse deactivate(@PathVariable String feeRuleId) {
         return feeRuleService.setStatus(feeRuleId, ActivationStatus.INACTIVE);

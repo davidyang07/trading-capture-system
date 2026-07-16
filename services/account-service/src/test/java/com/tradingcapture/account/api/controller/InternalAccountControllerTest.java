@@ -48,7 +48,7 @@ class InternalAccountControllerTest extends ControllerSliceTestSupport {
     }
 
     @Test
-    void tradingServiceBalanceScopeIsAlsoAccepted() throws Exception {
+    void tradingServiceValidateScopeIsAccepted() throws Exception {
         when(validationService.validate(anyList())).thenReturn(List.of(
                 new AccountValidationService.Outcome("ACC-1", true, AccountStatus.ACTIVE, true,
                         "investor1", null, null, List.of())));
@@ -57,6 +57,19 @@ class InternalAccountControllerTest extends ControllerSliceTestSupport {
                         .with(auth(AccountTestTokens.tradingMachineJwt()))
                         .contentType(MediaType.APPLICATION_JSON).content(BATCH_BODY))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void anInvestorBalanceTokenCannotReachTheCrossOwnerEndpoint() throws Exception {
+        // account:balance is a user scope (admin-web grants it to investors); it must NOT open
+        // the cross-owner batch endpoint — only account:validate / allocation:process do.
+        var investorBalance = TestJwts.jwt("sub-inv", "investor1",
+                List.of("INVESTOR"), "account:admin account:balance", List.of(AccountTestTokens.AUDIENCE));
+
+        mockMvc.perform(post("/internal/v1/accounts/batch").with(auth(investorBalance))
+                        .contentType(MediaType.APPLICATION_JSON).content(BATCH_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
     }
 
     @Test

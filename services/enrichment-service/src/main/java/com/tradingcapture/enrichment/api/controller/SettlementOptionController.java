@@ -33,7 +33,7 @@ public class SettlementOptionController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Create a settlement option")
     public ResponseEntity<SettlementOptionResponse> create(@Valid @RequestBody CreateSettlementOptionRequest request,
                                                            UriComponentsBuilder uriBuilder) {
@@ -57,7 +57,7 @@ public class SettlementOptionController {
     }
 
     @PutMapping("/{code}")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Update a settlement option")
     public SettlementOptionResponse update(@PathVariable String code,
                                            @Valid @RequestBody UpdateSettlementOptionRequest request) {
