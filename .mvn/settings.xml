@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Project-scoped Maven settings, activated via .mvn/maven.config.
+  Purpose: this build must resolve ONLY from Maven Central (and repositories declared
+  in the POMs, e.g. Confluent from Phase 6). It deliberately bypasses any user-level
+  settings.xml so leftover course-era registries (e.g. private GitHub Packages) can
+  never affect resolution on any machine. No credentials belong in this file.
+-->
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+</settings>

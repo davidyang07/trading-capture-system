@@ -1,0 +1,337 @@
+openapi: 3.0.3
+info:
+  title: Account Service API
+  version: 1.0.0
+  description: >
+    Financial accounts, immutable cash/security ledgers, ledger-derived balances, and a
+    machine-facing batch account-validation API (Phase 4). Balances are always summed from the
+    append-only ledger rows. Owner subject comes from the verified JWT; investors see only their
+    own accounts (unowned resources answer 404). Money and quantities are DECIMAL(19,4); all
+    timestamps are UTC. Errors use RFC 7807 problem+json with `errorCode` and `correlationId`.
+servers:
+  - url: http://localhost:8082
+security:
+  - bearerAuth: []
+tags:
+  - name: accounts
+  - name: ledger
+  - name: machine
+    description: M2M endpoints (scope account:validate or allocation:process)
+paths:
+  /api/v1/accounts:
+    post:
+      tags: [accounts]
+      summary: Create an account (scope account:admin; owner = JWT subject, ADMIN may set ownerSubject)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateAccountRequest' }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "400": { $ref: '#/components/responses/Problem' }
+        "409": { $ref: '#/components/responses/Problem' }
+    get:
+      tags: [accounts]
+      summary: Search accounts (scope account:balance; investors see own only; deterministic sort)
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/AccountStatus' } }
+        - { name: accountType, in: query, schema: { $ref: '#/components/schemas/AccountType' } }
+        - { name: currency, in: query, schema: { type: string } }
+        - { name: ownerSubject, in: query, schema: { type: string }, description: Administrator-only filter }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: sortBy, in: query, schema: { type: string, enum: [ACCOUNT_ID, ACCOUNT_NAME, STATUS, CREATED_AT] } }
+        - { name: sortDir, in: query, schema: { type: string, enum: [ASC, DESC] } }
+      responses:
+        "200": { description: Page of accounts, content: { application/json: { schema: { $ref: '#/components/schemas/AccountPage' } } } }
+  /api/v1/accounts/{accountId}:
+    parameters:
+      - { name: accountId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [accounts]
+      summary: Account detail (scope account:balance)
+      responses:
+        "200": { description: Account, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "404": { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [accounts]
+      summary: Rename an account (scope account:admin)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateAccountRequest' } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "404": { $ref: '#/components/responses/Problem' }
+  /api/v1/accounts/{accountId}/activate:
+    parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
+    post:
+      tags: [accounts]
+      summary: Activate a PENDING or SUSPENDED account (scope account:admin)
+      responses:
+        "200": { description: Activated, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "409": { $ref: '#/components/responses/Problem' }
+  /api/v1/accounts/{accountId}/suspend:
+    parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
+    post:
+      tags: [accounts]
+      summary: Suspend an ACTIVE account (scope account:admin) — suspended accounts reject transactions
+      responses:
+        "200": { description: Suspended, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "409": { $ref: '#/components/responses/Problem' }
+  /api/v1/accounts/{accountId}/close:
+    parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
+    post:
+      tags: [accounts]
+      summary: Close an account (scope account:admin) — requires every balance to be zero
+      responses:
+        "200": { description: Closed, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "409": { $ref: '#/components/responses/Problem' }
+  /api/v1/accounts/{accountId}/cash-transactions:
+    parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
+    post:
+      tags: [ledger]
+      summary: Post a cash ledger row (scope account:balance; immutable; sufficient-funds for debits)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PostCashTransactionRequest' } } }
+      responses:
+        "201": { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/CashTransaction' } } } }
+        "200": { description: Idempotent replay of an existing row, content: { application/json: { schema: { $ref: '#/components/schemas/CashTransaction' } } } }
+        "409": { $ref: '#/components/responses/Problem' }
+    get:
+      tags: [ledger]
+      summary: Cash ledger history (scope account:balance; newest first)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        "200": { description: History page, content: { application/json: { schema: { $ref: '#/components/schemas/CashTransactionPage' } } } }
+  /api/v1/accounts/{accountId}/security-transactions:
+    parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
+    post:
+      tags: [ledger]
+      summary: Post a security ledger row (scope account:balance; immutable; sufficient-position for deliveries)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/PostSecurityTransactionRequest' } } }
+      responses:
+        "201": { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/SecurityTransaction' } } } }
+        "200": { description: Idempotent replay of an existing row, content: { application/json: { schema: { $ref: '#/components/schemas/SecurityTransaction' } } } }
+        "409": { $ref: '#/components/responses/Problem' }
+    get:
+      tags: [ledger]
+      summary: Security ledger history (scope account:balance; newest first)
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+      responses:
+        "200": { description: History page, content: { application/json: { schema: { $ref: '#/components/schemas/SecurityTransactionPage' } } } }
+  /api/v1/accounts/{accountId}/balances:
+    parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
+    get:
+      tags: [ledger]
+      summary: Ledger-derived cash balances (by currency) and security positions (by instrument)
+      responses:
+        "200": { description: Balances, content: { application/json: { schema: { $ref: '#/components/schemas/Balances' } } } }
+        "404": { $ref: '#/components/responses/Problem' }
+  /internal/v1/accounts/batch:
+    post:
+      tags: [machine]
+      summary: Batch account existence/status/sufficiency validation (per-item verdicts)
+      description: Requires machine scope account:validate or allocation:process (not granted to admin-web). Read-only, cross-owner.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AccountBatchValidationRequest' } } }
+      responses:
+        "200": { description: Per-item verdicts, content: { application/json: { schema: { $ref: '#/components/schemas/AccountBatchValidationResponse' } } } }
+        "400": { $ref: '#/components/responses/Problem' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Problem:
+      description: RFC 7807 problem response
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    AccountType: { type: string, enum: [CASH, MARGIN] }
+    AccountStatus: { type: string, enum: [PENDING, ACTIVE, SUSPENDED, CLOSED] }
+    CashDirection: { type: string, enum: [CREDIT, DEBIT] }
+    SecurityDirection: { type: string, enum: [RECEIPT, DELIVERY] }
+    CashTransactionType: { type: string, enum: [DEPOSIT, WITHDRAWAL, TRADE_SETTLEMENT, FEE, ADJUSTMENT] }
+    SecurityTransactionType: { type: string, enum: [TRADE_SETTLEMENT, TRANSFER_IN, TRANSFER_OUT, ADJUSTMENT] }
+    CreateAccountRequest:
+      type: object
+      required: [accountName, accountType, baseCurrency]
+      properties:
+        accountId: { type: string, description: Generated (ACC-<uuid>) when omitted, pattern: '^[A-Za-z0-9._-]{1,64}$' }
+        ownerSubject: { type: string, description: Administrator-only; ignored for investors }
+        accountName: { type: string, maxLength: 255 }
+        accountType: { $ref: '#/components/schemas/AccountType' }
+        baseCurrency: { type: string, pattern: '^[A-Z]{3}$' }
+    UpdateAccountRequest:
+      type: object
+      required: [accountName]
+      properties:
+        accountName: { type: string, maxLength: 255 }
+    Account:
+      type: object
+      properties:
+        accountId: { type: string }
+        ownerSubject: { type: string }
+        accountName: { type: string }
+        accountType: { $ref: '#/components/schemas/AccountType' }
+        status: { $ref: '#/components/schemas/AccountStatus' }
+        baseCurrency: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    PostCashTransactionRequest:
+      type: object
+      required: [direction, transactionType, amount, currency]
+      properties:
+        direction: { $ref: '#/components/schemas/CashDirection' }
+        transactionType: { $ref: '#/components/schemas/CashTransactionType' }
+        amount: { type: string, description: Strictly positive DECIMAL(19,4), example: "1000.00" }
+        currency: { type: string, pattern: '^[A-Z]{3}$' }
+        externalRef: { type: string, maxLength: 64 }
+        idempotencyKey: { type: string, maxLength: 80, description: A replay with the same key returns the original row (200) }
+        description: { type: string, maxLength: 500 }
+    PostSecurityTransactionRequest:
+      type: object
+      required: [direction, transactionType, instrumentId, quantity]
+      properties:
+        direction: { $ref: '#/components/schemas/SecurityDirection' }
+        transactionType: { $ref: '#/components/schemas/SecurityTransactionType' }
+        instrumentId: { type: string, maxLength: 64 }
+        quantity: { type: string, description: Strictly positive DECIMAL(19,4), example: "100" }
+        externalRef: { type: string, maxLength: 64 }
+        idempotencyKey: { type: string, maxLength: 80 }
+        description: { type: string, maxLength: 500 }
+    CashTransaction:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        transactionRef: { type: string }
+        accountId: { type: string }
+        direction: { $ref: '#/components/schemas/CashDirection' }
+        transactionType: { $ref: '#/components/schemas/CashTransactionType' }
+        amount: { type: string }
+        currency: { type: string }
+        externalRef: { type: string, nullable: true }
+        idempotencyKey: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        postedAt: { type: string, format: date-time }
+    SecurityTransaction:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        transactionRef: { type: string }
+        accountId: { type: string }
+        direction: { $ref: '#/components/schemas/SecurityDirection' }
+        transactionType: { $ref: '#/components/schemas/SecurityTransactionType' }
+        instrumentId: { type: string }
+        quantity: { type: string }
+        externalRef: { type: string, nullable: true }
+        idempotencyKey: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        postedAt: { type: string, format: date-time }
+    Balances:
+      type: object
+      properties:
+        accountId: { type: string }
+        cashBalances:
+          type: array
+          items:
+            type: object
+            properties:
+              currency: { type: string }
+              balance: { type: string }
+        securityPositions:
+          type: array
+          items:
+            type: object
+            properties:
+              instrumentId: { type: string }
+              quantity: { type: string }
+    AccountBatchValidationRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [accountId]
+            properties:
+              accountId: { type: string, maxLength: 64 }
+              requiredCurrency: { type: string, pattern: '^[A-Z]{3}$' }
+              requiredCashAmount: { type: string }
+              instrumentId: { type: string, maxLength: 64 }
+              requiredQuantity: { type: string }
+    AccountBatchValidationResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              accountId: { type: string }
+              found: { type: boolean }
+              status: { $ref: '#/components/schemas/AccountStatus' }
+              active: { type: boolean }
+              ownerSubject: { type: string, nullable: true }
+              sufficientCash: { type: boolean, nullable: true }
+              sufficientSecurities: { type: boolean, nullable: true }
+              reasons: { type: array, items: { type: string } }
+    AccountPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/Account' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+    CashTransactionPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/CashTransaction' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+    SecurityTransactionPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/SecurityTransaction' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errorCode:
+          type: string
+          enum: [ACCOUNT_NOT_FOUND, TRANSACTION_NOT_FOUND, DUPLICATE_ACCOUNT_ID, INVALID_STATUS_TRANSITION,
+                 ACCOUNT_NOT_ACTIVE, ACCOUNT_NOT_EMPTY, INSUFFICIENT_FUNDS, INSUFFICIENT_SECURITIES,
+                 VALIDATION_FAILED, MALFORMED_REQUEST, CONCURRENT_MODIFICATION, CONSTRAINT_VIOLATION,
+                 NOT_FOUND, UNAUTHORIZED, FORBIDDEN, INTERNAL_ERROR]
+        correlationId: { type: string }
+        timestamp: { type: string, format: date-time }
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }

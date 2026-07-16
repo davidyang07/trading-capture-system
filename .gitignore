@@ -1,0 +1,85 @@
+# tcs-reference is intentionally stored outside this Git repository.
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+credentials/
+
+# Java and Maven
+**/target/
+*.class
+.flattened-pom.xml
+dependency-reduced-pom.xml
+.mvn/timing.properties
+
+# Node, Next.js, and frontend builds
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+**/build/
+**/.turbo/
+/.pnpm-store/
+.eslintcache
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Test output
+**/coverage/
+**/playwright-report/
+**/test-results/
+**/blob-report/
+
+# Local AI-agent configuration
+/AGENTS.md
+/CLAUDE.md
+/.claude/
+/CLAUDE.local.md
+
+# Internal planning, migration, status, and handoff documents
+/docs/plans/
+/docs/status/
+/docs/reference/
+
+# IDE files
+.idea/
+.vscode/
+*.iml
+.project
+.classpath
+.settings/
+*.swp
+*.swo
+*~
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+hs_err_pid*
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
