@@ -33,7 +33,7 @@ public class CurrencyController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Create a currency")
     public ResponseEntity<CurrencyResponse> create(@Valid @RequestBody CreateCurrencyRequest request,
                                                    UriComponentsBuilder uriBuilder) {
@@ -56,7 +56,7 @@ public class CurrencyController {
     }
 
     @PutMapping("/{code}")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Update a currency")
     public CurrencyResponse update(@PathVariable String code, @Valid @RequestBody UpdateCurrencyRequest request) {
         return referenceData.updateCurrency(code, request.name(), request.minorUnits());

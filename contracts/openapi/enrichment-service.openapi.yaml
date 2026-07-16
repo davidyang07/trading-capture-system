@@ -6,8 +6,9 @@ info:
     Reference data: instruments and their alternate identifiers, exchanges, currencies,
     settlement options, and fee rules (Phase 5). Read endpoints require scope enrichment:read
     and are Redis-cached (15-min TTL, invalidated on mutation, graceful DB fallback);
-    administrative mutations require enrichment:admin. Tokens must carry audience
-    enrichment-service. Errors use RFC 7807 problem+json with `errorCode` and `correlationId`.
+    administrative mutations require both scope enrichment:admin and realm role ADMIN. Tokens
+    must carry audience enrichment-service. Errors use RFC 7807 problem+json with `errorCode`
+    and `correlationId`.
 servers:
   - url: http://localhost:8083
 security:
@@ -22,7 +23,7 @@ paths:
   /api/v1/instruments:
     post:
       tags: [instruments]
-      summary: Create an instrument with identifiers (scope enrichment:admin)
+      summary: Create an instrument with identifiers (scope enrichment:admin + ADMIN role)
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/CreateInstrumentRequest' } } }
@@ -66,7 +67,7 @@ paths:
         "404": { $ref: '#/components/responses/Problem' }
     put:
       tags: [instruments]
-      summary: Update an instrument, replacing identifiers (scope enrichment:admin)
+      summary: Update an instrument, replacing identifiers (scope enrichment:admin + ADMIN role)
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/UpdateInstrumentRequest' } } }
@@ -75,33 +76,33 @@ paths:
         "404": { $ref: '#/components/responses/Problem' }
   /api/v1/instruments/{instrumentId}/activate:
     parameters: [ { name: instrumentId, in: path, required: true, schema: { type: string } } ]
-    post: { tags: [instruments], summary: "Activate (scope enrichment:admin)", responses: { "200": { description: Activated } } }
+    post: { tags: [instruments], summary: "Activate (scope enrichment:admin + ADMIN role)", responses: { "200": { description: Activated } } }
   /api/v1/instruments/{instrumentId}/deactivate:
     parameters: [ { name: instrumentId, in: path, required: true, schema: { type: string } } ]
-    post: { tags: [instruments], summary: "Deactivate (scope enrichment:admin)", responses: { "200": { description: Deactivated } } }
+    post: { tags: [instruments], summary: "Deactivate (scope enrichment:admin + ADMIN role)", responses: { "200": { description: Deactivated } } }
   /api/v1/exchanges:
-    post: { tags: [reference], summary: "Create exchange (scope enrichment:admin)", responses: { "201": { description: Created } } }
+    post: { tags: [reference], summary: "Create exchange (scope enrichment:admin + ADMIN role)", responses: { "201": { description: Created } } }
     get: { tags: [reference], summary: "List exchanges (scope enrichment:read)", responses: { "200": { description: Exchanges } } }
   /api/v1/exchanges/{mic}:
     parameters: [ { name: mic, in: path, required: true, schema: { type: string } } ]
     get: { tags: [reference], summary: "Exchange by MIC (scope enrichment:read)", responses: { "200": { description: Exchange }, "404": { $ref: '#/components/responses/Problem' } } }
-    put: { tags: [reference], summary: "Update exchange (scope enrichment:admin)", responses: { "200": { description: Updated } } }
+    put: { tags: [reference], summary: "Update exchange (scope enrichment:admin + ADMIN role)", responses: { "200": { description: Updated } } }
   /api/v1/currencies:
-    post: { tags: [reference], summary: "Create currency (scope enrichment:admin)", responses: { "201": { description: Created } } }
+    post: { tags: [reference], summary: "Create currency (scope enrichment:admin + ADMIN role)", responses: { "201": { description: Created } } }
     get: { tags: [reference], summary: "List currencies (scope enrichment:read)", responses: { "200": { description: Currencies } } }
   /api/v1/currencies/{code}:
     parameters: [ { name: code, in: path, required: true, schema: { type: string } } ]
     get: { tags: [reference], summary: "Currency by code (scope enrichment:read)", responses: { "200": { description: Currency }, "404": { $ref: '#/components/responses/Problem' } } }
-    put: { tags: [reference], summary: "Update currency (scope enrichment:admin)", responses: { "200": { description: Updated } } }
+    put: { tags: [reference], summary: "Update currency (scope enrichment:admin + ADMIN role)", responses: { "200": { description: Updated } } }
   /api/v1/settlement-options:
-    post: { tags: [reference], summary: "Create settlement option (scope enrichment:admin)", responses: { "201": { description: Created } } }
+    post: { tags: [reference], summary: "Create settlement option (scope enrichment:admin + ADMIN role)", responses: { "201": { description: Created } } }
     get: { tags: [reference], summary: "List settlement options (scope enrichment:read)", responses: { "200": { description: Options } } }
   /api/v1/settlement-options/{code}:
     parameters: [ { name: code, in: path, required: true, schema: { type: string } } ]
     get: { tags: [reference], summary: "Settlement option by code (scope enrichment:read)", responses: { "200": { description: Option }, "404": { $ref: '#/components/responses/Problem' } } }
-    put: { tags: [reference], summary: "Update settlement option (scope enrichment:admin)", responses: { "200": { description: Updated } } }
+    put: { tags: [reference], summary: "Update settlement option (scope enrichment:admin + ADMIN role)", responses: { "200": { description: Updated } } }
   /api/v1/fee-rules:
-    post: { tags: [fee-rules], summary: "Create fee rule (scope enrichment:admin)", responses: { "201": { description: Created } } }
+    post: { tags: [fee-rules], summary: "Create fee rule (scope enrichment:admin + ADMIN role)", responses: { "201": { description: Created } } }
     get: { tags: [fee-rules], summary: "List fee rules (scope enrichment:read)", responses: { "200": { description: Fee rules } } }
   /api/v1/fee-rules/applicable:
     get:
@@ -116,13 +117,13 @@ paths:
   /api/v1/fee-rules/{feeRuleId}:
     parameters: [ { name: feeRuleId, in: path, required: true, schema: { type: string } } ]
     get: { tags: [fee-rules], summary: "Fee rule by ID (scope enrichment:read)", responses: { "200": { description: Fee rule }, "404": { $ref: '#/components/responses/Problem' } } }
-    put: { tags: [fee-rules], summary: "Update fee rule (scope enrichment:admin)", responses: { "200": { description: Updated } } }
+    put: { tags: [fee-rules], summary: "Update fee rule (scope enrichment:admin + ADMIN role)", responses: { "200": { description: Updated } } }
   /api/v1/fee-rules/{feeRuleId}/activate:
     parameters: [ { name: feeRuleId, in: path, required: true, schema: { type: string } } ]
-    post: { tags: [fee-rules], summary: "Activate (scope enrichment:admin)", responses: { "200": { description: Activated } } }
+    post: { tags: [fee-rules], summary: "Activate (scope enrichment:admin + ADMIN role)", responses: { "200": { description: Activated } } }
   /api/v1/fee-rules/{feeRuleId}/deactivate:
     parameters: [ { name: feeRuleId, in: path, required: true, schema: { type: string } } ]
-    post: { tags: [fee-rules], summary: "Deactivate (scope enrichment:admin)", responses: { "200": { description: Deactivated } } }
+    post: { tags: [fee-rules], summary: "Deactivate (scope enrichment:admin + ADMIN role)", responses: { "200": { description: Deactivated } } }
   /internal/v1/instruments/lookup:
     post:
       tags: [machine]

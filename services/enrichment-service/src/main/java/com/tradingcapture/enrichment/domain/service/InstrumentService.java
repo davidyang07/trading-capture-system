@@ -108,6 +108,10 @@ public class InstrumentService {
         Instant now = Instant.now(clock);
         instrument.update(command.name(), command.instrumentType(), command.exchangeMic(), command.currencyCode(), now);
         instrument.clearIdentifiers();
+        // Flush the orphan-removal DELETEs before re-inserting: Hibernate orders child INSERTs
+        // before orphan DELETEs in one flush, so an unchanged identifier would otherwise collide
+        // on uq_alt_ids_source_value_exchange. Flushing here forces DELETE-before-INSERT.
+        instruments.flush();
         applyIdentifiers(instrument, command.identifiers(), now);
         instruments.save(instrument);
 

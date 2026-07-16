@@ -68,6 +68,20 @@ class InstrumentControllerTest extends ControllerSliceTestSupport {
     }
 
     @Test
+    void createRequiresAdminRoleNotJustTheScope() throws Exception {
+        // An INVESTOR carrying enrichment:admin (admin-web default scope) must still be refused:
+        // reference-data mutations require realm role ADMIN (global writes need scope + ADMIN).
+        var investorWithAdminScope = com.tradingcapture.testsupport.TestJwts.jwt("sub-inv", "investor1",
+                java.util.List.of("INVESTOR"), "enrichment:read enrichment:admin",
+                java.util.List.of(EnrichmentTestTokens.AUDIENCE));
+
+        mockMvc.perform(post("/api/v1/instruments").with(auth(investorWithAdminScope))
+                        .contentType(MediaType.APPLICATION_JSON).content(CREATE_BODY))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+    }
+
+    @Test
     void createReturns201() throws Exception {
         when(instrumentService.create(any())).thenReturn(response());
 

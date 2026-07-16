@@ -102,6 +102,28 @@ class InstrumentIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void updateKeepingAnIdentifierUnchangedSucceeds() throws Exception {
+        // Regression: clear-then-re-add of the same identifier must not collide on the unique
+        // constraint (Hibernate would otherwise INSERT the new row before deleting the orphan).
+        createInstrument(instrumentBody("AAPL", "Apple", "XNAS", "USD",
+                "{ \"source\": \"ISIN\", \"value\": \"US0378331005\" }, { \"source\": \"EXCHANGE_SYMBOL\", \"value\": \"AAPL\" }"))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/v1/instruments/AAPL")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + EnrichmentTestTokens.adminBearer())
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "Apple Inc", "instrumentType": "EQUITY", "exchangeMic": "XNAS",
+                                  "currencyCode": "USD",
+                                  "identifiers": [ { "source": "ISIN", "value": "US0378331005" },
+                                                   { "source": "EXCHANGE_SYMBOL", "value": "AAPL" } ] }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Apple Inc"))
+                .andExpect(jsonPath("$.alternateIdentifiers.length()").value(2));
+    }
+
+    @Test
     void updateReplacesIdentifiersAndDeactivateWorks() throws Exception {
         createInstrument(instrumentBody("AAPL", "Apple", "XNAS", "USD",
                 "{ \"source\": \"ISIN\", \"value\": \"US0378331005\" }")).andExpect(status().isCreated());

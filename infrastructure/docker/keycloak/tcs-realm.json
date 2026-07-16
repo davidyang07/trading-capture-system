@@ -181,6 +181,15 @@
           }
         }
       ]
+    },
+    {
+      "name": "account:validate",
+      "description": "Machine scope for account-service batch validation (/internal). Not granted to user clients.",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
     }
   ],
   "clients": [
@@ -241,7 +250,8 @@
         "enrichment:read",
         "trading-service-aud",
         "account-service-aud",
-        "enrichment-service-aud"
+        "enrichment-service-aud",
+        "account:validate"
       ],
       "optionalClientScopes": []
     },
@@ -258,7 +268,8 @@
         "enrichment:read",
         "account:balance",
         "account-service-aud",
-        "enrichment-service-aud"
+        "enrichment-service-aud",
+        "account:validate"
       ],
       "optionalClientScopes": []
     },

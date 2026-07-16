@@ -46,7 +46,7 @@ public class InstrumentController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Create an instrument with its alternate identifiers")
     @ApiResponse(responseCode = "201", description = "Created")
     @ApiResponse(responseCode = "400", description = "Validation failure or unknown exchange/currency")
@@ -89,7 +89,7 @@ public class InstrumentController {
     }
 
     @PutMapping("/{instrumentId}")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Update an instrument (replaces mutable fields and identifiers)")
     @ApiResponse(responseCode = "200", description = "Updated")
     @ApiResponse(responseCode = "404", description = "Unknown")
@@ -99,14 +99,14 @@ public class InstrumentController {
     }
 
     @PostMapping("/{instrumentId}/activate")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Activate an instrument")
     public InstrumentResponse activate(@PathVariable String instrumentId) {
         return instrumentService.setStatus(instrumentId, ActivationStatus.ACTIVE);
     }
 
     @PostMapping("/{instrumentId}/deactivate")
-    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_enrichment:admin') and hasRole('ADMIN')")
     @Operation(summary = "Deactivate an instrument")
     public InstrumentResponse deactivate(@PathVariable String instrumentId) {
         return instrumentService.setStatus(instrumentId, ActivationStatus.INACTIVE);

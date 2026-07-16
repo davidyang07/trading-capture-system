@@ -53,18 +53,13 @@ class BatchValidationIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
-    void internalEndpointRejectsATokenWithoutAServiceScope() throws Exception {
-        // A token carrying only account:admin (no account:balance, no allocation:process) is
-        // forbidden by the /internal/** chain rule.
-        String adminOnly = com.tradingcapture.testsupport.TestTokenIssuer.issue(claims -> claims
-                .claim("preferred_username", "tcs-admin")
-                .claim("realm_access", java.util.Map.of("roles", java.util.List.of("ADMIN")))
-                .claim("scope", "account:admin")
-                .audience(java.util.List.of(AccountTestTokens.AUDIENCE)));
-
+    void investorUserTokenCannotReachTheCrossOwnerEndpoint() throws Exception {
+        // An investor's admin-web token carries account:balance (a user scope) but not the
+        // machine scope account:validate / allocation:process — it must be refused, so it can
+        // never enumerate other investors' accounts through this endpoint.
         String body = "{ \"items\": [ { \"accountId\": \"ACC-1\" } ] }";
         mockMvc.perform(post("/internal/v1/accounts/batch")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminOnly)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccountTestTokens.investorBearer("investor1"))
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));

@@ -40,11 +40,12 @@ contract of record and `docs/adr/ADR-0003` for the read-mostly + Redis decision.
 
 ## Authorization
 
-Read endpoints require scope `enrichment:read`; administrative mutations require
-`enrichment:admin` (both held by the admin-web client). The machine namespace
+Read endpoints require scope `enrichment:read`; administrative mutations require both scope
+`enrichment:admin` and realm role `ADMIN`. The admin-web client can issue the scope to signed-in
+users, but an `INVESTOR` token carrying that scope alone is still forbidden. The machine namespace
 `/internal/v1/instruments/lookup` (batch resolution for allocation-engine / trading-service)
 requires `enrichment:read` or `allocation:process`. Missing/invalid tokens are 401, missing
-scope 403 — same RFC 7807 problem shape with `errorCode` and `correlationId`. Tokens must carry
+scope/role 403 — same RFC 7807 problem shape with `errorCode` and `correlationId`. Tokens must carry
 issuer `…/realms/tcs` **and** audience `enrichment-service` (realm `enrichment-service-aud`
 client scope).
 
