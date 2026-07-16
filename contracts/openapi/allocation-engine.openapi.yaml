@@ -1,0 +1,36 @@
+openapi: 3.0.3
+info:
+  title: Allocation Engine — Operational API
+  version: 0.1.0-draft
+  description: >
+    Contract v0 (Phase 1 skeleton). The allocation engine is Kafka-driven (see docs/contracts/event-catalog.md);
+    its REST surface is intentionally minimal: operational/inspection endpoints for admins. Refined in Phases 7-8.
+    No endpoint below is implemented yet.
+servers:
+  - url: http://localhost:8084
+security:
+  - bearerAuth: []
+tags:
+  - name: allocations
+    description: Read-only inspection (admin)
+paths:
+  /api/v1/allocations:
+    get:
+      tags: [allocations]
+      summary: Search allocations by state/allocId/date (admin; supports exception triage)
+      responses: { "200": { description: Page of allocations with state + error summaries } }
+  /api/v1/allocations/{allocationId}:
+    get:
+      tags: [allocations]
+      summary: Allocation detail — state history, orders/executions/accounts groups, validation errors, raw-message reference
+      parameters: [ { name: allocationId, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Allocation }, "404": { description: Unknown } }
+  /api/v1/raw-messages/{rawMessageId}:
+    get:
+      tags: [allocations]
+      summary: Raw FIX message as received (verbatim, immutable) + parse status
+      parameters: [ { name: rawMessageId, in: path, required: true, schema: { type: string } } ]
+      responses: { "200": { description: Raw message }, "404": { description: Unknown } }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }

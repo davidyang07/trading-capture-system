@@ -1,0 +1,568 @@
+openapi: 3.0.3
+info:
+  title: Trading Service API
+  version: 1.0.0
+  description: >
+    Orders, executions, append-only correction/cancellation chains, and the machine-facing
+    execution allocation-state API. Contract of record for Phase 3; the springdoc document
+    served at /v3/api-docs is reconciled against this file at phase gates.
+
+    Authorization model: scopes gate operations (order:create/read/update/delete,
+    execution:read/write, allocation:process); realm role ADMIN gates execution writes;
+    investor ownership is enforced server-side — resources of other owners answer 404
+    (existence is never revealed). Owner identity always derives from the verified JWT
+    (preferred_username, falling back to sub), never from request content.
+servers:
+  - url: http://localhost:8081
+security:
+  - bearerAuth: []
+tags:
+  - name: orders
+  - name: executions
+  - name: allocation-machine
+    description: M2M endpoints for allocation-engine (scope allocation:process)
+
+paths:
+  /api/v1/orders:
+    post:
+      tags: [orders]
+      summary: Create order (scope order:create; owner = authenticated subject; generates orderId when absent; rejects duplicates)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateOrderRequest' }
+      responses:
+        "201":
+          description: Created (Location header points at the order)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        "400": { $ref: '#/components/responses/ValidationError' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "409":
+          description: Duplicate orderId
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    get:
+      tags: [orders]
+      summary: Search orders (scope order:read; investors always see owned orders only)
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/OrderStatus' } }
+        - { name: side, in: query, schema: { $ref: '#/components/schemas/Side' } }
+        - { name: instrumentId, in: query, schema: { type: string } }
+        - { name: accountId, in: query, schema: { type: string } }
+        - name: ownerSubject
+          in: query
+          description: Administrator-only filter; ignored for investors
+          schema: { type: string }
+        - { name: settleDateFrom, in: query, schema: { type: string, format: date } }
+        - { name: settleDateTo, in: query, schema: { type: string, format: date } }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - name: sortBy
+          in: query
+          description: Whitelisted sort keys; orderId ASC is always appended as tiebreaker
+          schema: { type: string, enum: [ORDER_ID, STATUS, PRICE, SETTLE_DATE, CREATED_AT], default: CREATED_AT }
+        - { name: sortDir, in: query, schema: { type: string, enum: [ASC, DESC], default: DESC } }
+      responses:
+        "200":
+          description: Page of orders
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderPage' }
+        "400": { $ref: '#/components/responses/ValidationError' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/orders/{orderId}:
+    parameters:
+      - { name: orderId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [orders]
+      summary: Order detail with complete execution history (scope order:read; ownership-checked)
+      responses:
+        "200":
+          description: Order with executions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrderDetail' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [orders]
+      summary: Update order (scope order:update; status NEW only; executed-quantity invariants enforced)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateOrderRequest' }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Order' }
+        "400": { $ref: '#/components/responses/ValidationError' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409":
+          description: Not eligible (status is not NEW)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    delete:
+      tags: [orders]
+      summary: Delete order (scope order:delete; status NEW and no execution history)
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409":
+          description: Not eligible (not NEW, or execution history exists)
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/executions:
+    post:
+      tags: [executions]
+      summary: Capture a trade (scope execution:write + role ADMIN; server derives cumQty/leavesQty/avgPx and order status)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateExecutionRequest' }
+      responses:
+        "201":
+          description: Created (Location header points at the execution detail)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Execution' }
+        "400": { $ref: '#/components/responses/ValidationError' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409":
+          description: Order already filled, overfill, or duplicate execId
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+    get:
+      tags: [executions]
+      summary: Search executions (scope execution:read; investors see executions of owned orders only)
+      parameters:
+        - { name: orderId, in: query, schema: { type: string } }
+        - { name: execId, in: query, schema: { type: string } }
+        - { name: execType, in: query, schema: { $ref: '#/components/schemas/ExecutionType' } }
+        - { name: side, in: query, schema: { $ref: '#/components/schemas/Side' } }
+        - { name: allocationState, in: query, schema: { $ref: '#/components/schemas/AllocationState' } }
+        - { name: tradeDateFrom, in: query, schema: { type: string, format: date } }
+        - { name: tradeDateTo, in: query, schema: { type: string, format: date } }
+        - { name: transactTimeFrom, in: query, schema: { type: string, format: date-time } }
+        - { name: transactTimeTo, in: query, schema: { type: string, format: date-time } }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - name: sortBy
+          in: query
+          description: Whitelisted sort keys; internalId ASC is always appended as tiebreaker
+          schema: { type: string, enum: [EXEC_ID, TRANSACT_TIME, TRADE_DATE, CREATED_AT], default: TRANSACT_TIME }
+        - { name: sortDir, in: query, schema: { type: string, enum: [ASC, DESC], default: DESC } }
+      responses:
+        "200":
+          description: Page of executions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecutionPage' }
+        "400": { $ref: '#/components/responses/ValidationError' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+
+  /api/v1/executions/{internalId}:
+    parameters:
+      - { name: internalId, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [executions]
+      summary: Execution detail with fees and the full correction/cancellation chain (scope execution:read)
+      responses:
+        "200":
+          description: Execution detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecutionDetail' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+
+  /api/v1/executions/{internalId}/correct:
+    parameters:
+      - { name: internalId, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [executions]
+      summary: Correct — appends a linked TRADE_CORRECT record (scope execution:write + role ADMIN); the target row is never mutated
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CorrectExecutionRequest' }
+      responses:
+        "201":
+          description: Correction appended
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Execution' }
+        "400": { $ref: '#/components/responses/ValidationError' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409":
+          description: Target superseded, cancelled, or allocated; duplicate execId; or overfill
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /api/v1/executions/{internalId}/cancel:
+    parameters:
+      - { name: internalId, in: path, required: true, schema: { type: string } }
+    post:
+      tags: [executions]
+      summary: Cancel — appends a linked TRADE_CANCEL record voiding the chain (scope execution:write + role ADMIN)
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CancelExecutionRequest' }
+      responses:
+        "201":
+          description: Cancellation appended
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Execution' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409":
+          description: Target superseded, cancelled, or allocated
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+  /internal/v1/executions/allocation-state:
+    put:
+      tags: [allocation-machine]
+      summary: Idempotently mark executions allocated/released for an allocationId (scope allocation:process)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AllocationStateUpdateRequest' }
+      responses:
+        "200":
+          description: Applied (appliedCount 0 on an idempotent replay)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AllocationStateUpdateResponse' }
+        "400": { $ref: '#/components/responses/ValidationError' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "409":
+          description: Conflicting allocation state or ineligible target
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  responses:
+    ValidationError:
+      description: Request validation failed (fieldErrors lists the offending fields)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Unauthorized:
+      description: Bearer token missing or invalid (signature, expiry, issuer, or audience)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Token lacks a required scope or role
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Resource unknown — or owned by another subject (existence is masked)
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+
+  schemas:
+    OrderStatus: { type: string, enum: [NEW, PARTIALLY_FILLED, FILLED] }
+    Side: { type: string, enum: [BUY, SELL] }
+    OrderType: { type: string, enum: [MARKET, LIMIT] }
+    PriceType: { type: string, enum: [PERCENTAGE, PER_UNIT, FIXED_AMOUNT] }
+    SettleType: { type: string, enum: [REGULAR, CASH, NEXT_DAY, T_PLUS_2, T_PLUS_3, T_PLUS_4] }
+    ExecutionType: { type: string, enum: [TRADE, TRADE_CORRECT, TRADE_CANCEL] }
+    AllocationState: { type: string, enum: [UNALLOCATED, ALLOCATED] }
+    MiscFeeBasis: { type: string, enum: [ABSOLUTE, PER_UNIT, PERCENTAGE] }
+
+    Problem:
+      type: object
+      description: RFC 7807 problem with service extensions
+      properties:
+        type: { type: string, example: "about:blank" }
+        title: { type: string, example: "Conflict" }
+        status: { type: integer, example: 409 }
+        detail: { type: string }
+        instance: { type: string }
+        errorCode:
+          type: string
+          description: Stable machine-readable code
+          enum: [ORDER_NOT_FOUND, EXECUTION_NOT_FOUND, DUPLICATE_ORDER_ID, DUPLICATE_EXEC_ID,
+                 ORDER_NOT_ELIGIBLE, ORDER_HAS_EXECUTIONS, ORDER_ALREADY_FILLED, EXECUTION_OVERFILL,
+                 EXECUTION_TARGET_SUPERSEDED, EXECUTION_TARGET_CANCELLED, EXECUTION_ALLOCATED,
+                 ALLOCATION_TARGET_INELIGIBLE, ALLOCATION_STATE_CONFLICT, INVALID_REFERENCE,
+                 VALIDATION_FAILED, MALFORMED_REQUEST, CONCURRENT_MODIFICATION, CONSTRAINT_VIOLATION,
+                 NOT_FOUND, UNAUTHORIZED, FORBIDDEN, INTERNAL_ERROR]
+        correlationId: { type: string }
+        timestamp: { type: string, format: date-time }
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
+
+    MiscFeeRequest:
+      type: object
+      required: [feeType, amount, currency, basis]
+      properties:
+        feeType: { type: string, maxLength: 20, example: REGULATORY }
+        amount: { type: string, format: decimal, example: "0.04", description: "DECIMAL(19,4), >= 0" }
+        currency: { type: string, pattern: "^[A-Z]{3}$", example: USD }
+        basis: { $ref: '#/components/schemas/MiscFeeBasis' }
+
+    MiscFee:
+      type: object
+      properties:
+        feeType: { type: string }
+        amount: { type: string, format: decimal }
+        currency: { type: string }
+        basis: { $ref: '#/components/schemas/MiscFeeBasis' }
+
+    CreateOrderRequest:
+      type: object
+      required: [accountId, instrumentId, side, orderType, price, priceType, currency, quantity, settleType, settleDate]
+      properties:
+        orderId:
+          type: string
+          pattern: "^[A-Za-z0-9._-]{1,64}$"
+          description: Generated when omitted; duplicates rejected with 409
+        clOrdId: { type: string, maxLength: 64 }
+        accountId: { type: string, maxLength: 64, description: Format-validated in Phase 3; account-service validation arrives in Phase 4 }
+        instrumentId: { type: string, maxLength: 64, description: Format-validated in Phase 3; enrichment-service validation arrives in Phase 5 }
+        side: { $ref: '#/components/schemas/Side' }
+        orderType: { $ref: '#/components/schemas/OrderType' }
+        price: { type: string, format: decimal, example: "189.25", description: "DECIMAL(19,8), > 0" }
+        priceType: { $ref: '#/components/schemas/PriceType' }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        quantity: { type: string, format: decimal, example: "100", description: "DECIMAL(19,4), > 0" }
+        settleType: { $ref: '#/components/schemas/SettleType' }
+        settleDate: { type: string, format: date }
+
+    UpdateOrderRequest:
+      type: object
+      required: [accountId, instrumentId, side, orderType, price, priceType, currency, quantity, settleType, settleDate]
+      description: Full replacement of the client-editable fields; owner/status/quantities are never client-writable
+      properties:
+        clOrdId: { type: string, maxLength: 64 }
+        accountId: { type: string, maxLength: 64 }
+        instrumentId: { type: string, maxLength: 64 }
+        side: { $ref: '#/components/schemas/Side' }
+        orderType: { $ref: '#/components/schemas/OrderType' }
+        price: { type: string, format: decimal }
+        priceType: { $ref: '#/components/schemas/PriceType' }
+        currency: { type: string, pattern: "^[A-Z]{3}$" }
+        quantity: { type: string, format: decimal }
+        settleType: { $ref: '#/components/schemas/SettleType' }
+        settleDate: { type: string, format: date }
+
+    Order:
+      type: object
+      properties:
+        orderId: { type: string }
+        clOrdId: { type: string, nullable: true }
+        ownerSubject: { type: string, description: Derived from the JWT at creation }
+        accountId: { type: string }
+        instrumentId: { type: string }
+        status: { $ref: '#/components/schemas/OrderStatus' }
+        side: { $ref: '#/components/schemas/Side' }
+        orderType: { $ref: '#/components/schemas/OrderType' }
+        price: { type: string, format: decimal }
+        priceType: { $ref: '#/components/schemas/PriceType' }
+        currency: { type: string }
+        quantity: { type: string, format: decimal }
+        cumQty: { type: string, format: decimal, description: Server-derived active executed quantity }
+        leavesQty: { type: string, format: decimal, description: Server-derived remaining quantity }
+        settleType: { $ref: '#/components/schemas/SettleType' }
+        settleDate: { type: string, format: date }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, format: int64, description: Optimistic-lock version }
+
+    OrderDetail:
+      type: object
+      properties:
+        order: { $ref: '#/components/schemas/Order' }
+        executions:
+          type: array
+          description: Complete execution history in write order (immutable audit trail)
+          items: { $ref: '#/components/schemas/Execution' }
+
+    OrderPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/Order' }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+
+    CreateExecutionRequest:
+      type: object
+      required: [orderId, lastQty, lastPx]
+      description: cumQty/leavesQty/avgPx/order status are always server-derived — they cannot be supplied
+      properties:
+        orderId: { type: string }
+        execId:
+          type: string
+          pattern: "^[A-Za-z0-9._-]{1,64}$"
+          description: External execution ID (FIX ExecID); generated when omitted
+        lastQty: { type: string, format: decimal, description: "Fill quantity, DECIMAL(19,4), > 0" }
+        lastPx: { type: string, format: decimal, description: "Fill price, DECIMAL(19,8), > 0" }
+        tradeDate: { type: string, format: date, description: Defaults to the current UTC date }
+        transactTime: { type: string, format: date-time, description: Defaults to the current instant }
+        text: { type: string, maxLength: 500 }
+        miscFees:
+          type: array
+          items: { $ref: '#/components/schemas/MiscFeeRequest' }
+
+    CorrectExecutionRequest:
+      type: object
+      required: [lastQty, lastPx]
+      description: "miscFees semantics: omitted = keep the target's fees; [] = none; non-empty = replace"
+      properties:
+        execId: { type: string, pattern: "^[A-Za-z0-9._-]{1,64}$" }
+        lastQty: { type: string, format: decimal }
+        lastPx: { type: string, format: decimal }
+        text: { type: string, maxLength: 500 }
+        miscFees:
+          type: array
+          items: { $ref: '#/components/schemas/MiscFeeRequest' }
+
+    CancelExecutionRequest:
+      type: object
+      properties:
+        execId: { type: string, pattern: "^[A-Za-z0-9._-]{1,64}$" }
+        text: { type: string, maxLength: 500 }
+
+    Execution:
+      type: object
+      properties:
+        internalId: { type: string, description: "Immutable internal ID (exec_<uuid>)" }
+        execId: { type: string, description: External execution ID (unique) }
+        orderId: { type: string }
+        execType: { $ref: '#/components/schemas/ExecutionType' }
+        execRefId: { type: string, nullable: true, description: Internal ID of the amended target (corrections/cancellations) }
+        rootExecutionId: { type: string, description: Chain root, resolved and persisted at write time (TRADE rows reference themselves) }
+        ordStatus: { $ref: '#/components/schemas/OrderStatus' }
+        side: { $ref: '#/components/schemas/Side' }
+        lastQty: { type: string, format: decimal }
+        lastPx: { type: string, format: decimal, nullable: true, description: Null on cancellations }
+        cumQty: { type: string, format: decimal, description: Server-derived order aggregate as of this event }
+        leavesQty: { type: string, format: decimal, description: Server-derived order aggregate as of this event }
+        avgPx: { type: string, format: decimal, nullable: true, description: Server-derived average price over active fills }
+        currency: { type: string }
+        tradeDate: { type: string, format: date }
+        transactTime: { type: string, format: date-time }
+        settleType: { $ref: '#/components/schemas/SettleType' }
+        settleDate: { type: string, format: date }
+        text: { type: string, nullable: true }
+        allocationState: { $ref: '#/components/schemas/AllocationState' }
+        allocationId: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+
+    ChainLink:
+      type: object
+      properties:
+        internalId: { type: string }
+        execId: { type: string }
+        execType: { $ref: '#/components/schemas/ExecutionType' }
+        lastQty: { type: string, format: decimal }
+        lastPx: { type: string, format: decimal, nullable: true }
+        transactTime: { type: string, format: date-time }
+        tip: { type: boolean, description: True for the single unamended end of the chain }
+
+    ExecutionDetail:
+      type: object
+      properties:
+        execution: { $ref: '#/components/schemas/Execution' }
+        miscFees:
+          type: array
+          items: { $ref: '#/components/schemas/MiscFee' }
+        chainRootExecutionId: { type: string }
+        chainActive: { type: boolean, description: False when the chain tip is a cancellation (the trade is void) }
+        chain:
+          type: array
+          description: Full chain in write order, root first
+          items: { $ref: '#/components/schemas/ChainLink' }
+
+    ExecutionPage:
+      type: object
+      properties:
+        content:
+          type: array
+          items: { $ref: '#/components/schemas/Execution' }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+
+    AllocationStateUpdateRequest:
+      type: object
+      required: [allocationId, action]
+      properties:
+        allocationId: { type: string, pattern: "^[A-Za-z0-9._-]{1,64}$" }
+        action: { type: string, enum: [ALLOCATE, RELEASE] }
+        executionInternalIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { type: string }
+          description: Required for ALLOCATE; optional for RELEASE (omitted = release all bound to allocationId)
+
+    AllocationStateUpdateResponse:
+      type: object
+      properties:
+        allocationId: { type: string }
+        action: { type: string, enum: [ALLOCATE, RELEASE] }
+        appliedCount: { type: integer, description: Actual transitions performed; 0 on an idempotent replay }
+        executions:
+          type: array
+          items:
+            type: object
+            properties:
+              internalId: { type: string }
+              allocationState: { $ref: '#/components/schemas/AllocationState' }
+              allocationId: { type: string, nullable: true }

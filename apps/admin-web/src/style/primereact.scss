@@ -1,0 +1,102 @@
+/** primereact UI */
+
+.p-sidebar-right .p-sidebar {
+  width: 45rem;
+  border-top-left-radius: var(--border-radius);
+  border-bottom-left-radius: var(--border-radius);
+}
+
+.p-button.p-button-help,
+.p-button-group.p-button-help > .p-button,
+.p-splitbutton.p-button-help > .p-button,
+.p-fileupload-choose.p-button-help {
+  color: var(--color-white);
+  background: var(--main-color);
+  border-color: var(--main-color);
+  font-size: var(--font-size-md);
+}
+
+.p-button.p-button-secondary,
+.p-button-group.p-button-secondary > .p-button,
+.p-splitbutton.p-button-secondary > .p-button,
+.p-fileupload-choose.p-button-secondary {
+  color: var(--color-white);
+  background: var(--color-grey-8);
+  border-color: var(--color-grey-8);
+  font-size: var(--font-size-md);
+}
+
+.p-button.p-button-warning,
+.p-button-group.p-button-warning > .p-button,
+.p-splitbutton.p-button-warning > .p-button,
+.p-fileupload-choose.p-button-warning {
+  color: var(--color-white);
+  background: var(--color-orange);
+  border-color: var(--color-orange);
+  font-size: var(--font-size-md);
+}
+
+.p-datepicker-buttonbar > button {
+  background-color: transparent !important;
+  border: none !important;
+  color: var(--color-blue) !important;
+}
+
+.p-datepicker table td > span.p-highlight,
+.p-paginator .p-paginator-pages .p-paginator-page.p-highlight {
+  color: var(--color-blue-3);
+  background-color: var(--color-blue-2);
+}
+
+.p-datatable.p-datatable-selectable
+  .p-datatable-tbody
+  > tr[data-p-selectable-row="false"] {
+  background-color: #f7f7f7;
+  cursor: not-allowed;
+}
+
+// table row hover
+.p-datatable.p-datatable-selectable
+  .p-datatable-tbody
+  > tr.p-selectable-row:not(.p-highlight):not(.p-datatable-emptymessage):hover {
+  color: #4b5563;
+  background-color: #f5e1ff;
+}
+
+// table row active
+.p-datatable .p-datatable-tbody > tr.p-highlight {
+  color: #4b5563;
+  background-color: #d9aeea;
+}
+
+// table body td empty display ‘-’
+.p-datatable.p-datatable-selectable
+  .p-datatable-tbody
+  > tr.p-selectable-row
+  > td[role="cell"]:empty:after {
+  content: "-";
+  color: rgba(0, 0, 0, 0.3);
+}
+
+// checkbox active
+.p-checkbox.p-highlight .p-checkbox-box {
+  background-color: var(--main-color);
+  border-color: var(--main-color);
+}
+
+// checkbox hover
+.p-checkbox:not(.p-disabled):has(.p-checkbox-input:hover) .p-checkbox-box {
+  border-color: var(--main-color);
+}
+
+// // multiselect active
+// .p-multiselect-panel .p-multiselect-items .p-multiselect-item.p-highlight {
+//   color: #4b5563;
+//   background-color: #d9aeea;
+// }
+
+// // dropdown active
+// .p-dropdown-panel .p-dropdown-items .p-dropdown-item.p-highlight {
+//   color: #4b5563;
+//   background-color: #d9aeea;
+// }

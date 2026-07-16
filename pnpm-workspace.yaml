@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+# Dependency postinstall build scripts stay blocked (supply-chain conservative):
+# both packages ship prebuilt platform binaries via optionalDependencies, so the
+# compile-from-source fallback is unnecessary here.
+allowBuilds:
+  "@parcel/watcher": false
+  unrs-resolver: false

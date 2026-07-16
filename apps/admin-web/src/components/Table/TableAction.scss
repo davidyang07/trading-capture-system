@@ -1,0 +1,17 @@
+.action-laypanel .p-overlaypanel-content {
+  padding: 0px;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+}
+
+.action-laypanel .p-overlaypanel-content > div {
+  cursor: pointer;
+  padding: 10px 12px;
+  font-size: var(--font-size-md);
+
+  &:hover {
+    color: var(--nav-active-color);
+    background-color: var(--nav-active-bg-color);
+  }
+}

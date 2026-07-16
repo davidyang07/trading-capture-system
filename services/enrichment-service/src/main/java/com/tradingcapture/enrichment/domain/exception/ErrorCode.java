@@ -1,0 +1,30 @@
+package com.tradingcapture.enrichment.domain.exception;
+
+/**
+ * Stable machine-readable error codes carried in every problem response
+ * (the {@code errorCode} extension of the RFC 7807 body).
+ */
+public enum ErrorCode {
+    INSTRUMENT_NOT_FOUND,
+    EXCHANGE_NOT_FOUND,
+    CURRENCY_NOT_FOUND,
+    SETTLEMENT_OPTION_NOT_FOUND,
+    FEE_RULE_NOT_FOUND,
+    IDENTIFIER_NOT_FOUND,
+    AMBIGUOUS_IDENTIFIER,
+    DUPLICATE_INSTRUMENT_ID,
+    DUPLICATE_EXCHANGE,
+    DUPLICATE_CURRENCY,
+    DUPLICATE_SETTLEMENT_OPTION,
+    DUPLICATE_FEE_RULE,
+    DUPLICATE_IDENTIFIER,
+    INVALID_REFERENCE,
+    VALIDATION_FAILED,
+    MALFORMED_REQUEST,
+    CONCURRENT_MODIFICATION,
+    CONSTRAINT_VIOLATION,
+    NOT_FOUND,
+    UNAUTHORIZED,
+    FORBIDDEN,
+    INTERNAL_ERROR
+}

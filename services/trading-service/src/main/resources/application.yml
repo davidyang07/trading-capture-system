@@ -1,0 +1,44 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: trading-service
+  datasource:
+    # Host port 3307: this machine's local mysqld owns 3306 (docs/status/known-gaps.md).
+    url: jdbc:mysql://${TRADING_DB_HOST:localhost}:${TRADING_DB_PORT:3307}/${TRADING_DB_NAME:tcs_trading}?connectionTimeZone=UTC
+    username: ${TRADING_DB_USER:trading_svc}
+    password: ${TRADING_DB_PASSWORD:trading_dev} # documented dev placeholder (.env.example)
+  jpa:
+    hibernate:
+      # Flyway owns the schema; Hibernate only verifies the mapping matches it.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    # db/seed carries the deterministic dev/demo data; production-style deployments
+    # override this property to db/migration only (see services/trading-service/README.md).
+    locations: classpath:db/migration,classpath:db/seed
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/tcs}
+
+tcs:
+  security:
+    # Tokens must carry this audience (attached by the realm's trading-service-aud scope).
+    audience: trading-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
