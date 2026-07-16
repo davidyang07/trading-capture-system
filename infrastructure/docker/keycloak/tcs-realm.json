@@ -1,0 +1,334 @@
+{
+  "realm": "tcs",
+  "enabled": true,
+  "displayName": "Trading Capture System",
+  "registrationAllowed": false,
+  "sslRequired": "external",
+  "roles": {
+    "realm": [
+      {
+        "name": "ADMIN",
+        "description": "Full administrative access across the Trading Capture System"
+      },
+      {
+        "name": "INVESTOR",
+        "description": "Investor: owns orders; access restricted to owned resources"
+      }
+    ]
+  },
+  "clientScopes": [
+    {
+      "name": "order:create",
+      "description": "Create orders",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "order:read",
+      "description": "Read/search orders",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "order:update",
+      "description": "Update eligible NEW orders",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "order:delete",
+      "description": "Delete eligible NEW orders",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "execution:read",
+      "description": "Read/search executions",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "execution:write",
+      "description": "Create/correct/cancel executions",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "account:admin",
+      "description": "Administer accounts and lifecycle",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "account:balance",
+      "description": "Post transactions and read balances",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "enrichment:read",
+      "description": "Read reference data",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "enrichment:admin",
+      "description": "Mutate reference data",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "allocation:process",
+      "description": "Machine scope: allocation-engine operations against trading/account services",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "true",
+        "display.on.consent.screen": "false"
+      }
+    },
+    {
+      "name": "trading-service-aud",
+      "description": "Adds trading-service to the token audience (resource servers validate aud, ADR-0008)",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "trading-service-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "trading-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "account-service-aud",
+      "description": "Adds account-service to the token audience (resource servers validate aud, ADR-0008)",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "account-service-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "account-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "name": "enrichment-service-aud",
+      "description": "Adds enrichment-service to the token audience (resource servers validate aud, ADR-0008)",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "enrichment-service-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "enrichment-service",
+            "access.token.claim": "true",
+            "id.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "admin-web",
+      "name": "TCS Admin Web (Next.js via Auth.js)",
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "order:create",
+        "order:read",
+        "order:update",
+        "order:delete",
+        "execution:read",
+        "execution:write",
+        "account:admin",
+        "account:balance",
+        "enrichment:read",
+        "enrichment:admin",
+        "trading-service-aud",
+        "account-service-aud",
+        "enrichment-service-aud"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "allocation-engine",
+      "name": "Allocation Engine (machine client)",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "allocation-engine-dev-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [
+        "allocation:process",
+        "order:read",
+        "execution:read",
+        "execution:write",
+        "account:balance",
+        "enrichment:read",
+        "trading-service-aud",
+        "account-service-aud",
+        "enrichment-service-aud"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "trading-service",
+      "name": "Trading Service (machine client for enrichment/account calls)",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "trading-service-dev-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [
+        "enrichment:read",
+        "account:balance",
+        "account-service-aud",
+        "enrichment-service-aud"
+      ],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "account-service",
+      "name": "Account Service (machine client, reserved)",
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "account-service-dev-secret",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [],
+      "optionalClientScopes": []
+    }
+  ],
+  "users": [
+    {
+      "username": "tcs-admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ada",
+      "lastName": "Admin",
+      "email": "tcs-admin@tcs.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "tcs-admin-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "ADMIN"
+      ]
+    },
+    {
+      "username": "investor1",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Ivan",
+      "lastName": "Investor",
+      "email": "investor1@tcs.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "investor1-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "INVESTOR"
+      ]
+    },
+    {
+      "username": "investor2",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Iris",
+      "lastName": "Investor",
+      "email": "investor2@tcs.local",
+      "credentials": [
+        {
+          "type": "password",
+          "value": "investor2-dev",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "INVESTOR"
+      ]
+    }
+  ]
+}

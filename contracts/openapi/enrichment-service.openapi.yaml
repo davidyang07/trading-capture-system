@@ -1,0 +1,282 @@
+openapi: 3.0.3
+info:
+  title: Enrichment Service API
+  version: 1.0.0
+  description: >
+    Reference data: instruments and their alternate identifiers, exchanges, currencies,
+    settlement options, and fee rules (Phase 5). Read endpoints require scope enrichment:read
+    and are Redis-cached (15-min TTL, invalidated on mutation, graceful DB fallback);
+    administrative mutations require enrichment:admin. Tokens must carry audience
+    enrichment-service. Errors use RFC 7807 problem+json with `errorCode` and `correlationId`.
+servers:
+  - url: http://localhost:8083
+security:
+  - bearerAuth: []
+tags:
+  - name: instruments
+  - name: reference
+  - name: fee-rules
+  - name: machine
+    description: M2M endpoints (scope enrichment:read or allocation:process)
+paths:
+  /api/v1/instruments:
+    post:
+      tags: [instruments]
+      summary: Create an instrument with identifiers (scope enrichment:admin)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CreateInstrumentRequest' } } }
+      responses:
+        "201": { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+        "400": { $ref: '#/components/responses/Problem' }
+        "409": { $ref: '#/components/responses/Problem' }
+    get:
+      tags: [instruments]
+      summary: Search instruments (scope enrichment:read)
+      parameters:
+        - { name: instrumentType, in: query, schema: { $ref: '#/components/schemas/InstrumentType' } }
+        - { name: exchangeMic, in: query, schema: { type: string } }
+        - { name: currency, in: query, schema: { type: string } }
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ActivationStatus' } }
+        - { name: page, in: query, schema: { type: integer, minimum: 0, default: 0 } }
+        - { name: size, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 20 } }
+        - { name: sortBy, in: query, schema: { type: string, enum: [INSTRUMENT_ID, NAME, CREATED_AT] } }
+        - { name: sortDir, in: query, schema: { type: string, enum: [ASC, DESC] } }
+      responses:
+        "200": { description: Page of instrument summaries, content: { application/json: { schema: { $ref: '#/components/schemas/InstrumentSummaryPage' } } } }
+  /api/v1/instruments/by-identifier:
+    get:
+      tags: [instruments]
+      summary: Resolve an instrument by alternate identifier (scope enrichment:read)
+      parameters:
+        - { name: source, in: query, required: true, schema: { $ref: '#/components/schemas/IdentifierSource' } }
+        - { name: value, in: query, required: true, schema: { type: string } }
+        - { name: exchange, in: query, required: false, schema: { type: string }, description: Disambiguates an exchange symbol }
+      responses:
+        "200": { description: Instrument, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+        "404": { $ref: '#/components/responses/Problem' }
+        "409": { description: Ambiguous identifier, $ref: '#/components/responses/Problem' }
+  /api/v1/instruments/{instrumentId}:
+    parameters: [ { name: instrumentId, in: path, required: true, schema: { type: string } } ]
+    get:
+      tags: [instruments]
+      summary: Instrument detail incl. identifiers (scope enrichment:read)
+      responses:
+        "200": { description: Instrument, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+        "404": { $ref: '#/components/responses/Problem' }
+    put:
+      tags: [instruments]
+      summary: Update an instrument, replacing identifiers (scope enrichment:admin)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UpdateInstrumentRequest' } } }
+      responses:
+        "200": { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Instrument' } } } }
+        "404": { $ref: '#/components/responses/Problem' }
+  /api/v1/instruments/{instrumentId}/activate:
+    parameters: [ { name: instrumentId, in: path, required: true, schema: { type: string } } ]
+    post: { tags: [instruments], summary: "Activate (scope enrichment:admin)", responses: { "200": { description: Activated } } }
+  /api/v1/instruments/{instrumentId}/deactivate:
+    parameters: [ { name: instrumentId, in: path, required: true, schema: { type: string } } ]
+    post: { tags: [instruments], summary: "Deactivate (scope enrichment:admin)", responses: { "200": { description: Deactivated } } }
+  /api/v1/exchanges:
+    post: { tags: [reference], summary: "Create exchange (scope enrichment:admin)", responses: { "201": { description: Created } } }
+    get: { tags: [reference], summary: "List exchanges (scope enrichment:read)", responses: { "200": { description: Exchanges } } }
+  /api/v1/exchanges/{mic}:
+    parameters: [ { name: mic, in: path, required: true, schema: { type: string } } ]
+    get: { tags: [reference], summary: "Exchange by MIC (scope enrichment:read)", responses: { "200": { description: Exchange }, "404": { $ref: '#/components/responses/Problem' } } }
+    put: { tags: [reference], summary: "Update exchange (scope enrichment:admin)", responses: { "200": { description: Updated } } }
+  /api/v1/currencies:
+    post: { tags: [reference], summary: "Create currency (scope enrichment:admin)", responses: { "201": { description: Created } } }
+    get: { tags: [reference], summary: "List currencies (scope enrichment:read)", responses: { "200": { description: Currencies } } }
+  /api/v1/currencies/{code}:
+    parameters: [ { name: code, in: path, required: true, schema: { type: string } } ]
+    get: { tags: [reference], summary: "Currency by code (scope enrichment:read)", responses: { "200": { description: Currency }, "404": { $ref: '#/components/responses/Problem' } } }
+    put: { tags: [reference], summary: "Update currency (scope enrichment:admin)", responses: { "200": { description: Updated } } }
+  /api/v1/settlement-options:
+    post: { tags: [reference], summary: "Create settlement option (scope enrichment:admin)", responses: { "201": { description: Created } } }
+    get: { tags: [reference], summary: "List settlement options (scope enrichment:read)", responses: { "200": { description: Options } } }
+  /api/v1/settlement-options/{code}:
+    parameters: [ { name: code, in: path, required: true, schema: { type: string } } ]
+    get: { tags: [reference], summary: "Settlement option by code (scope enrichment:read)", responses: { "200": { description: Option }, "404": { $ref: '#/components/responses/Problem' } } }
+    put: { tags: [reference], summary: "Update settlement option (scope enrichment:admin)", responses: { "200": { description: Updated } } }
+  /api/v1/fee-rules:
+    post: { tags: [fee-rules], summary: "Create fee rule (scope enrichment:admin)", responses: { "201": { description: Created } } }
+    get: { tags: [fee-rules], summary: "List fee rules (scope enrichment:read)", responses: { "200": { description: Fee rules } } }
+  /api/v1/fee-rules/applicable:
+    get:
+      tags: [fee-rules]
+      summary: Active fee rules applicable to a trade with the given (optional) dimensions (scope enrichment:read)
+      parameters:
+        - { name: exchange, in: query, required: false, schema: { type: string } }
+        - { name: instrumentType, in: query, required: false, schema: { $ref: '#/components/schemas/InstrumentType' } }
+        - { name: currency, in: query, required: false, schema: { type: string } }
+      responses:
+        "200": { description: Applicable fee rules, content: { application/json: { schema: { type: array, items: { $ref: '#/components/schemas/FeeRule' } } } } }
+  /api/v1/fee-rules/{feeRuleId}:
+    parameters: [ { name: feeRuleId, in: path, required: true, schema: { type: string } } ]
+    get: { tags: [fee-rules], summary: "Fee rule by ID (scope enrichment:read)", responses: { "200": { description: Fee rule }, "404": { $ref: '#/components/responses/Problem' } } }
+    put: { tags: [fee-rules], summary: "Update fee rule (scope enrichment:admin)", responses: { "200": { description: Updated } } }
+  /api/v1/fee-rules/{feeRuleId}/activate:
+    parameters: [ { name: feeRuleId, in: path, required: true, schema: { type: string } } ]
+    post: { tags: [fee-rules], summary: "Activate (scope enrichment:admin)", responses: { "200": { description: Activated } } }
+  /api/v1/fee-rules/{feeRuleId}/deactivate:
+    parameters: [ { name: feeRuleId, in: path, required: true, schema: { type: string } } ]
+    post: { tags: [fee-rules], summary: "Deactivate (scope enrichment:admin)", responses: { "200": { description: Deactivated } } }
+  /internal/v1/instruments/lookup:
+    post:
+      tags: [machine]
+      summary: Batch resolve instruments by alternate identifier (scope enrichment:read or allocation:process)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/InstrumentBatchLookupRequest' } } }
+      responses:
+        "200": { description: Per-item resolutions, content: { application/json: { schema: { $ref: '#/components/schemas/InstrumentBatchLookupResponse' } } } }
+        "400": { $ref: '#/components/responses/Problem' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  responses:
+    Problem:
+      description: RFC 7807 problem response
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+  schemas:
+    InstrumentType: { type: string, enum: [EQUITY, BOND, ETF, FUND] }
+    ActivationStatus: { type: string, enum: [ACTIVE, INACTIVE] }
+    IdentifierSource: { type: string, enum: [CUSIP, ISIN, SEDOL, EXCHANGE_SYMBOL] }
+    FeeType: { type: string, enum: [COMMISSION, EXCHANGE_FEE, REGULATORY_FEE, CLEARING_FEE, TAX] }
+    FeeBasis: { type: string, enum: [ABSOLUTE, PER_UNIT, PERCENTAGE] }
+    IdentifierInput:
+      type: object
+      required: [source, value]
+      properties:
+        source: { $ref: '#/components/schemas/IdentifierSource' }
+        value: { type: string, maxLength: 64, description: Normalized to trimmed upper-case server-side }
+    CreateInstrumentRequest:
+      type: object
+      required: [instrumentId, name, instrumentType, exchangeMic, currencyCode]
+      properties:
+        instrumentId: { type: string, pattern: '^[A-Za-z0-9._-]{1,64}$' }
+        name: { type: string, maxLength: 255 }
+        instrumentType: { $ref: '#/components/schemas/InstrumentType' }
+        exchangeMic: { type: string, pattern: '^[A-Z0-9]{4}$' }
+        currencyCode: { type: string, pattern: '^[A-Z]{3}$' }
+        identifiers: { type: array, items: { $ref: '#/components/schemas/IdentifierInput' } }
+    UpdateInstrumentRequest:
+      type: object
+      required: [name, instrumentType, exchangeMic, currencyCode]
+      properties:
+        name: { type: string, maxLength: 255 }
+        instrumentType: { $ref: '#/components/schemas/InstrumentType' }
+        exchangeMic: { type: string, pattern: '^[A-Z0-9]{4}$' }
+        currencyCode: { type: string, pattern: '^[A-Z]{3}$' }
+        identifiers: { type: array, items: { $ref: '#/components/schemas/IdentifierInput' } }
+    Instrument:
+      type: object
+      properties:
+        instrumentId: { type: string }
+        name: { type: string }
+        instrumentType: { $ref: '#/components/schemas/InstrumentType' }
+        exchangeMic: { type: string }
+        currencyCode: { type: string }
+        status: { $ref: '#/components/schemas/ActivationStatus' }
+        alternateIdentifiers:
+          type: array
+          items:
+            type: object
+            properties:
+              source: { $ref: '#/components/schemas/IdentifierSource' }
+              value: { type: string }
+              exchangeMic: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    InstrumentSummary:
+      type: object
+      properties:
+        instrumentId: { type: string }
+        name: { type: string }
+        instrumentType: { $ref: '#/components/schemas/InstrumentType' }
+        exchangeMic: { type: string }
+        currencyCode: { type: string }
+        status: { $ref: '#/components/schemas/ActivationStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    FeeRule:
+      type: object
+      properties:
+        feeRuleId: { type: string }
+        name: { type: string }
+        feeType: { $ref: '#/components/schemas/FeeType' }
+        basis: { $ref: '#/components/schemas/FeeBasis' }
+        rate: { type: string, description: DECIMAL(19,8) }
+        currencyCode: { type: string, nullable: true }
+        exchangeMic: { type: string, nullable: true }
+        instrumentType: { allOf: [ { $ref: '#/components/schemas/InstrumentType' } ], nullable: true }
+        status: { $ref: '#/components/schemas/ActivationStatus' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        version: { type: integer, format: int64 }
+    InstrumentBatchLookupRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [source, value]
+            properties:
+              source: { $ref: '#/components/schemas/IdentifierSource' }
+              value: { type: string, maxLength: 64 }
+              exchangeMic: { type: string, pattern: '^[A-Z0-9]{4}$' }
+    InstrumentBatchLookupResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              source: { $ref: '#/components/schemas/IdentifierSource' }
+              value: { type: string }
+              exchangeMic: { type: string, nullable: true }
+              found: { type: boolean }
+              ambiguous: { type: boolean }
+              instrument: { allOf: [ { $ref: '#/components/schemas/InstrumentSummary' } ], nullable: true }
+    InstrumentSummaryPage:
+      type: object
+      properties:
+        content: { type: array, items: { $ref: '#/components/schemas/InstrumentSummary' } }
+        page: { type: integer }
+        size: { type: integer }
+        totalElements: { type: integer, format: int64 }
+        totalPages: { type: integer }
+    Problem:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        errorCode:
+          type: string
+          enum: [INSTRUMENT_NOT_FOUND, EXCHANGE_NOT_FOUND, CURRENCY_NOT_FOUND, SETTLEMENT_OPTION_NOT_FOUND,
+                 FEE_RULE_NOT_FOUND, IDENTIFIER_NOT_FOUND, AMBIGUOUS_IDENTIFIER, DUPLICATE_INSTRUMENT_ID,
+                 DUPLICATE_EXCHANGE, DUPLICATE_CURRENCY, DUPLICATE_SETTLEMENT_OPTION, DUPLICATE_FEE_RULE,
+                 DUPLICATE_IDENTIFIER, INVALID_REFERENCE, VALIDATION_FAILED, MALFORMED_REQUEST,
+                 CONCURRENT_MODIFICATION, CONSTRAINT_VIOLATION, NOT_FOUND, UNAUTHORIZED, FORBIDDEN, INTERNAL_ERROR]
+        correlationId: { type: string }
+        timestamp: { type: string, format: date-time }
+        fieldErrors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }

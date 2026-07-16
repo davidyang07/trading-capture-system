@@ -1,0 +1,68 @@
+# Trading Capture System — local development infrastructure (Phase 2 scope).
+# Grows per phase: Kafka + Schema Registry arrive in Phase 6, Prometheus + Grafana in Phase 11,
+# application services once they have runnable features (Phase 3+).
+# All credentials below are documented local-development values only (see .env.example).
+
+name: tcs
+
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: tcs-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-tcs_root_dev}
+    ports:
+      # Host port defaults to 3307: many dev machines (including the project owner's)
+      # run a local mysqld on 3306. Container port stays 3306.
+      - "${MYSQL_HOST_PORT:-3307}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./infrastructure/docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD:-tcs_root_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: tcs-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    container_name: tcs-keycloak
+    command: ["start-dev", "--import-realm", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin_dev}
+      KC_HTTP_PORT: "8180"
+    ports:
+      - "8180:8180"
+      - "9000:9000" # management interface (health/metrics)
+    volumes:
+      # Mount the whole data dir (exists in the image with keycloak-user ownership);
+      # mounting only data/h2 leaves a root-owned volume dir the non-root server cannot write.
+      - keycloak-data:/opt/keycloak/data
+      - ./infrastructure/docker/keycloak/tcs-realm.json:/opt/keycloak/data/import/tcs-realm.json:ro
+    healthcheck:
+      # Keycloak 26 images ship no curl/wget; probe the management port from bash.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+
+volumes:
+  mysql-data:
+  redis-data:
+  keycloak-data:

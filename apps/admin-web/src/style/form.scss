@@ -1,0 +1,29 @@
+.tcs-form .form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.tcs-form .form-item.invalid {
+  :nth-child(2) {
+    border-color: var(--color-red-2);
+  }
+}
+
+.tcs-form .form-item .err {
+  margin-top: -10px;
+  color: #ff0000;
+}
+
+.tcs-form .form-label {
+  color: var(--main-color);
+  font-weight: bold;
+  gap: 8px;
+
+  .pi-asterisk {
+    font-size: 8px;
+    font-weight: bold;
+    color: var(--color-red-1);
+  }
+}

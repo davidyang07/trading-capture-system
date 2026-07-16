@@ -1,0 +1,30 @@
+package com.tradingcapture.trading.domain.exception;
+
+/**
+ * Stable machine-readable error codes carried in every problem response
+ * (the {@code errorCode} extension of the RFC 7807 body).
+ */
+public enum ErrorCode {
+    ORDER_NOT_FOUND,
+    EXECUTION_NOT_FOUND,
+    DUPLICATE_ORDER_ID,
+    DUPLICATE_EXEC_ID,
+    ORDER_NOT_ELIGIBLE,
+    ORDER_HAS_EXECUTIONS,
+    ORDER_ALREADY_FILLED,
+    EXECUTION_OVERFILL,
+    EXECUTION_TARGET_SUPERSEDED,
+    EXECUTION_TARGET_CANCELLED,
+    EXECUTION_ALLOCATED,
+    ALLOCATION_TARGET_INELIGIBLE,
+    ALLOCATION_STATE_CONFLICT,
+    INVALID_REFERENCE,
+    VALIDATION_FAILED,
+    MALFORMED_REQUEST,
+    CONCURRENT_MODIFICATION,
+    CONSTRAINT_VIOLATION,
+    NOT_FOUND,
+    UNAUTHORIZED,
+    FORBIDDEN,
+    INTERNAL_ERROR
+}
