@@ -1,0 +1,35 @@
+{
+    "type": "record",
+    "namespace": "com.tradingcapture.events",
+    "name": "AllocationRejected",
+    "doc": "An allocation was rejected: field validation failed (state INVALID) or logical validation failed (state REJECTED, Phase 8). Carries the complete collected error list (ADR-0012). Topic tcs.allocation.allocation-rejected.v1, key = allocId when known, else the raw-message reference.",
+    "fields": [
+        {
+            "name": "metadata",
+            "type": "com.tradingcapture.events.EventMetadata",
+            "doc": "Shared event envelope."
+        },
+        {
+            "name": "allocId",
+            "type": [
+                "null",
+                "string"
+            ],
+            "default": null,
+            "doc": "Business allocation identifier; null when the message failed before an AllocID could be read."
+        },
+        {
+            "name": "rawMessageId",
+            "type": "long",
+            "doc": "allocation-engine raw_messages surrogate id of the inbound FIX message."
+        },
+        {
+            "name": "errors",
+            "type": {
+                "type": "array",
+                "items": "com.tradingcapture.events.ValidationErrorDetail"
+            },
+            "doc": "All validation errors collected for the message (never just the first)."
+        }
+    ]
+}

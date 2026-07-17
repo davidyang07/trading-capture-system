@@ -1,0 +1,60 @@
+{
+    "type": "record",
+    "namespace": "com.tradingcapture.events",
+    "name": "ValidationErrorDetail",
+    "doc": "One typed validation error from the allocation-engine collect-all validator (ADR-0012). Error codes are stable strings (not Avro enums) so new codes remain BACKWARD-compatible: MALFORMED_MESSAGE, UNSUPPORTED_MESSAGE_TYPE, MISSING_REQUIRED_FIELD, INVALID_VALUE_FORMAT, VALUE_NOT_SUPPORTED, VALUE_OUT_OF_BOUND, CONFLICTING_FIELDS.",
+    "fields": [
+        {
+            "name": "errorCode",
+            "type": "string",
+            "doc": "Stable machine-readable error code from the validation taxonomy."
+        },
+        {
+            "name": "message",
+            "type": "string",
+            "doc": "Safe human-readable summary. Never contains raw payload dumps, stack traces, or secret values."
+        },
+        {
+            "name": "fields",
+            "type": {
+                "type": "array",
+                "items": {
+                    "type": "record",
+                    "name": "ValidationErrorField",
+                    "doc": "A FIX field implicated in the error, resolved via the FIX 4.4 data dictionary where possible.",
+                    "fields": [
+                        {
+                            "name": "fieldId",
+                            "type": [
+                                "null",
+                                "int"
+                            ],
+                            "default": null,
+                            "doc": "FIX tag number, null when the error is not attributable to a single tag."
+                        },
+                        {
+                            "name": "fieldName",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null,
+                            "doc": "Dictionary-resolved FIX field name, null when unresolvable."
+                        },
+                        {
+                            "name": "fieldValue",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null,
+                            "doc": "Offending raw field value, null when absent (e.g. missing required field)."
+                        }
+                    ]
+                }
+            },
+            "default": [],
+            "doc": "Fields implicated in this error; empty for message-level errors."
+        }
+    ]
+}
