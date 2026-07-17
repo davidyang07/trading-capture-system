@@ -4,6 +4,66 @@ server:
 spring:
   application:
     name: allocation-engine
+  datasource:
+    # Host port 3307: this machine's local mysqld owns 3306 (docs/status/known-gaps.md).
+    url: jdbc:mysql://${ALLOCATION_DB_HOST:localhost}:${ALLOCATION_DB_PORT:3307}/${ALLOCATION_DB_NAME:tcs_allocation}?connectionTimeZone=UTC
+    username: ${ALLOCATION_DB_USER:allocation_svc}
+    password: ${ALLOCATION_DB_PASSWORD:allocation_dev} # documented dev placeholder (.env.example)
+  jpa:
+    hibernate:
+      # Flyway owns the schema; Hibernate only verifies the mapping matches it.
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/tcs}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: allocation-engine
+      # Replay from the beginning when the group is new: ingestion is idempotent
+      # (raw_messages coordinates + allocation business key, ADR-0007).
+      auto-offset-reset: earliest
+      # Offsets are committed by the container after the listener returns (ack-mode record)
+      # — never before the durable work of the attempt is done.
+      enable-auto-commit: false
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      ack-mode: record
+
+tcs:
+  security:
+    # Tokens must carry this audience (attached by the realm's allocation-engine-aud scope
+    # once Phase 9 finalizes the realm; no business endpoints exist yet).
+    audience: allocation-engine
+  kafka:
+    schema-registry-url: ${SCHEMA_REGISTRY_URL:http://localhost:8085}
+  ingest:
+    # Inbound topic and retry shape (docs/contracts/event-catalog.md). Defaults are the
+    # production contract — 4 attempts, exponential 1s -> 4s -> 16s, then the DLT;
+    # integration tests shrink the delays to exercise real exhaustion quickly.
+    inbound-topic: tcs.fix.allocation-instruction.v1
+    retry:
+      attempts: 4
+      initial-delay-ms: 1000
+      multiplier: 4.0
+  outbox:
+    # ADR-0005: poller latency/throughput knobs. `enabled` exists for tests that need a
+    # context without a competing publisher; production always leaves it on.
+    poll-interval: 500ms
+    batch-size: 50
+    publish-timeout: 10s
+    enabled: true
 
 management:
   endpoints:

@@ -13,5 +13,76 @@
 
     <artifactId>event-contracts</artifactId>
     <name>event-contracts</name>
-    <description>Versioned Avro event schemas and generated classes (populated in Phase 6; see docs/contracts/event-catalog.md)</description>
+    <description>Versioned Avro event schemas and generated classes (docs/contracts/event-catalog.md is the catalog of record)</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+        </dependency>
+
+        <!-- Tests prove Confluent-serializer alignment (round-trip through a mock registry)
+             and BACKWARD-compatibility rules; the serializer itself is a test-only concern
+             here — services that publish depend on it directly. -->
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-avro-serializer</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter-params</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.assertj</groupId>
+            <artifactId>assertj-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.confluent</groupId>
+            <artifactId>kafka-schema-registry-client</artifactId>
+            <version>${confluent.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Generated sources are build output only (target/generated-sources/avro):
+                 never hand-edited, never committed (.claude/rules/events.md). -->
+            <plugin>
+                <groupId>org.apache.avro</groupId>
+                <artifactId>avro-maven-plugin</artifactId>
+                <version>${avro.version}</version>
+                <executions>
+                    <execution>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>schema</goal>
+                        </goals>
+                        <configuration>
+                            <sourceDirectory>${project.basedir}/src/main/avro</sourceDirectory>
+                            <outputDirectory>${project.build.directory}/generated-sources/avro</outputDirectory>
+                            <!-- Shared records referenced by the event schemas compile first. -->
+                            <imports>
+                                <import>${project.basedir}/src/main/avro/EventMetadata.avsc</import>
+                                <import>${project.basedir}/src/main/avro/ValidationErrorDetail.avsc</import>
+                            </imports>
+                            <stringType>String</stringType>
+                            <!-- decimal logical types materialize as BigDecimal (ADR-0014). -->
+                            <enableDecimalLogicalType>true</enableDecimalLogicalType>
+                            <fieldVisibility>PRIVATE</fieldVisibility>
+                            <createSetters>false</createSetters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

@@ -1,0 +1,78 @@
+{
+    "type": "record",
+    "namespace": "com.tradingcapture.events",
+    "name": "SettlementRequested",
+    "doc": "An allocation completed (New/Replace only) and settlement is requested for its accounts (state COMPLETED, emitted from Phase 8 orchestration). Topic tcs.allocation.settlement-requested.v1, key = allocId.",
+    "fields": [
+        {
+            "name": "metadata",
+            "type": "com.tradingcapture.events.EventMetadata",
+            "doc": "Shared event envelope."
+        },
+        {
+            "name": "allocId",
+            "type": "string",
+            "doc": "Business allocation identifier (FIX tag 70, AllocID)."
+        },
+        {
+            "name": "settlementDate",
+            "type": {
+                "type": "int",
+                "logicalType": "date"
+            },
+            "doc": "Settlement date (FIX tag 64, SettlDate, LocalMktDate)."
+        },
+        {
+            "name": "accounts",
+            "type": {
+                "type": "array",
+                "items": {
+                    "type": "record",
+                    "name": "SettlementAccount",
+                    "doc": "One account participating in settlement of this allocation.",
+                    "fields": [
+                        {
+                            "name": "account",
+                            "type": "string",
+                            "doc": "Allocation account identifier (FIX tag 79, AllocAccount)."
+                        },
+                        {
+                            "name": "quantity",
+                            "type": {
+                                "type": "bytes",
+                                "logicalType": "decimal",
+                                "precision": 19,
+                                "scale": 4
+                            },
+                            "doc": "Quantity allocated to this account (FIX tag 80, AllocQty). Decimal(19,4) (ADR-0014)."
+                        },
+                        {
+                            "name": "netMoney",
+                            "type": [
+                                "null",
+                                {
+                                    "type": "bytes",
+                                    "logicalType": "decimal",
+                                    "precision": 19,
+                                    "scale": 4
+                                }
+                            ],
+                            "default": null,
+                            "doc": "Net money for this account (FIX tag 154, AllocNetMoney); null when the instruction did not carry it."
+                        },
+                        {
+                            "name": "currency",
+                            "type": [
+                                "null",
+                                "string"
+                            ],
+                            "default": null,
+                            "doc": "Settlement currency ISO code; null when not specified on the instruction."
+                        }
+                    ]
+                }
+            },
+            "doc": "Accounts and amounts to settle."
+        }
+    ]
+}
