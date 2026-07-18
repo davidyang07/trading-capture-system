@@ -47,10 +47,8 @@ pnpm-debug.log*
 /.claude/
 /CLAUDE.local.md
 
-# Internal planning, migration, status, and handoff documents
-/docs/plans/
-/docs/status/
-/docs/reference/
+# Internal documentation (ADRs, architecture, contracts, planning, status) — kept local only
+/docs/
 
 # IDE files
 .idea/
