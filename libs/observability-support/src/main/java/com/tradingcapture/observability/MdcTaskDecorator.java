@@ -7,8 +7,7 @@ import java.util.Map;
 
 /**
  * Copies the caller's MDC (including {@code correlationId}) onto async executor threads
- * so correlation survives {@code @Async} and executor hops. Ported from the reference
- * audit-utils MdcTaskDecorator.
+ * so correlation survives {@code @Async} and executor hops.
  */
 public class MdcTaskDecorator implements TaskDecorator {
 

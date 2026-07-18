@@ -1,8 +1,7 @@
 package com.tradingcapture.trading.domain.model;
 
 /**
- * Order lifecycle status, persisted as the FIX OrdStatus(39) code. Ported from the reference
- * domain (deployment-tcs-exec-backend) with the same code mapping; the status itself is
+ * Order lifecycle status, persisted as the FIX OrdStatus(39) code; the status itself is
  * always derived server-side from the order's active executed quantity, never accepted
  * from a client.
  */

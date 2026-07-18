@@ -31,12 +31,12 @@ One MySQL 8.4 instance, four schemas, four users. Each schema is owned and migra
 
 ## Balance semantics (account-service)
 
-Balances are ledger sums over immutable transaction rows (pattern from `spring-async-hw`, re-typed to `BigDecimal`):
+Balances are ledger sums over immutable transaction rows (typed as `BigDecimal`):
 `cash_balance(account, currency) = Σ credits − Σ debits`. Sufficient-funds/securities validation and negative-balance prevention are enforced in the service inside the same transaction that appends the ledger row, guarded by optimistic locking on the account row. Suspended accounts reject trading/allocation participation.
 
 ## Audit chains (trading-service)
 
-Corrections and cancellations never mutate the original execution: a new row (`TRADE_CORRECT` / `TRADE_CANCEL`) references its target via `exec_ref_id`, and `root_execution_id` is resolved at write time by walking the chain (pattern from `execution-engine-answer`; the reference schema declared `root_id` but never populated it — this design fixes that). Chains remain fully queryable; invalid state transitions (e.g., correcting a cancelled execution) are rejected.
+Corrections and cancellations never mutate the original execution: a new row (`TRADE_CORRECT` / `TRADE_CANCEL`) references its target via `exec_ref_id`, and `root_execution_id` is resolved at write time by walking the chain and persisted on every row. Chains remain fully queryable; invalid state transitions (e.g., correcting a cancelled execution) are rejected.
 
 ## What Redis may hold (never authoritative)
 

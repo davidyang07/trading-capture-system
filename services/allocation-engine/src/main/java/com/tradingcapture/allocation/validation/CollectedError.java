@@ -5,8 +5,8 @@ import com.tradingcapture.allocation.domain.model.ValidationErrorCode;
 import java.util.List;
 
 /**
- * One typed validation error with the FIX fields it implicates (ADR-0012 taxonomy,
- * modernized from the reference {@code GenericFieldError}). Feeds both the
+ * One typed validation error with the FIX fields it implicates (ADR-0012 taxonomy).
+ * Feeds both the
  * {@code validation_errors} tables and the {@code ValidationErrorDetail} event record.
  */
 public record CollectedError(ValidationErrorCode code, String message, List<FieldRef> fields) {

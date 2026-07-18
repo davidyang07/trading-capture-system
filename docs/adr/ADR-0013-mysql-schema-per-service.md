@@ -3,7 +3,7 @@
 Status: Accepted (2026-07-14)
 
 ## Context
-The brief requires service-owned databases or schemas with explicit ownership boundaries; local development must stay runnable on a laptop.
+The system requires service-owned databases or schemas with explicit ownership boundaries; local development must stay runnable on a laptop.
 
 ## Decision
 One MySQL 8.4 container hosts four schemas (`tcs_trading`, `tcs_account`, `tcs_enrichment`, `tcs_allocation`). Each service connects with its own MySQL user granted privileges **only on its own schema** — cross-schema access is physically impossible, not merely conventional. Flyway runs per service against its schema.

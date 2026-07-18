@@ -9,8 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Loads the FIX 4.4 data dictionary (migrated from the reference repositories, see
- * docs/reference/reuse-matrix.md) once. The dictionary drives group parsing, required-field
+ * Loads the FIX 4.4 data dictionary once. The dictionary drives group parsing, required-field
  * knowledge, and field-name resolution for the validation taxonomy.
  */
 @Configuration

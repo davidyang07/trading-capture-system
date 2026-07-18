@@ -14,8 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * Pins the persisted FIX code mappings (ported from the reference domain) and the
- * fail-loudly rule for unknown codes — silently defaulting would corrupt history.
+ * Pins the persisted FIX code mappings and the fail-loudly rule for unknown codes —
+ * silently defaulting would corrupt history.
  */
 class EnumCodeTest {
 

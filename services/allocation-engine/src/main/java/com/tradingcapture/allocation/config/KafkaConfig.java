@@ -17,8 +17,7 @@ import java.util.Map;
 
 /**
  * Producer wiring (consumers are Boot-auto-configured from {@code spring.kafka.consumer}).
- * Durability defaults carried from the reference producer profile (event-inventory):
- * {@code acks=all}, idempotent producer, snappy compression. Two templates:
+ * Durability defaults: {@code acks=all}, idempotent producer, snappy compression. Two templates:
  * <ul>
  *   <li>{@code stringKafkaTemplate} — raw-string records; also the template
  *       {@code @RetryableTopic} uses to forward records to retry/DLT topics;</li>
