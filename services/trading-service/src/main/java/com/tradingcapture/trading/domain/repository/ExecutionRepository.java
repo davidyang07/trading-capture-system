@@ -19,6 +19,8 @@ public interface ExecutionRepository extends JpaRepository<Execution, String>, J
 
     List<Execution> findByExecRefIdIn(Collection<String> execRefIds);
 
+    List<Execution> findByExecIdIn(Collection<String> execIds);
+
     List<Execution> findByRootExecutionIdOrderByCreatedAtAscInternalIdAsc(String rootExecutionId);
 
     List<Execution> findByAllocationId(String allocationId);

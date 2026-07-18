@@ -23,5 +23,8 @@ public abstract class AllocationIntegrationTestSupport extends MySqlContainerSup
         registry.add("tcs.kafka.schema-registry-url", () -> MOCK_REGISTRY);
         // Fast outbox ticks keep awaitility waits short without changing semantics.
         registry.add("tcs.outbox.poll-interval", () -> "100ms");
+        // The scheduled orchestration driver stays off in ingestion tests (no downstream services);
+        // orchestration tests drive it explicitly. Redis is not required when it is disabled.
+        registry.add("tcs.orchestration.enabled", () -> "false");
     }
 }
