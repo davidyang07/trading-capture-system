@@ -301,7 +301,17 @@ paths:
 
 components:
   securitySchemes:
-    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Keycloak-issued OAuth2/OIDC access token (realm `tcs`). Every request is validated for
+        signature, issuer, expiry, and audience `trading-service`. Authorities: realm roles map to
+        `ROLE_ADMIN`/`ROLE_INVESTOR`; `scope` claims map to `SCOPE_<scope>`. The required scope,
+        role, ownership, and 401-vs-403 behavior for each operation are specified in
+        SECURITY.md (the enforced authorization matrix). Machine
+        (`/internal`) endpoints require a client-credentials token with the documented machine scope.
 
   responses:
     ValidationError:

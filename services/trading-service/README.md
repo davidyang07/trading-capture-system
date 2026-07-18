@@ -62,7 +62,9 @@ only the fields allocation selection/validation need — no full execution discl
 Unowned resources answer **404** (existence is never revealed); missing/invalid tokens 401
 and missing scope/role 403, all in the same RFC 7807 problem shape with `errorCode` and
 `correlationId`. Tokens must carry issuer `…/realms/tcs` **and** audience `trading-service`
-(attached by the realm's `trading-service-aud` client scope).
+(attached by the realm's `trading-service-aud` client scope). The enforced per-endpoint
+authorization matrix is in `SECURITY.md`; `LiveKeycloakAuthorizationTest`
+proves it against a real Keycloak container with real issued tokens (Phase 9).
 
 Public paths (documented): `/actuator/health*`, `/actuator/info`, `/v3/api-docs*`,
 `/swagger-ui*`.

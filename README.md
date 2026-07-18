@@ -58,7 +58,12 @@ Registry under a `BACKWARD` compatibility policy.
 against the local Keycloak realm. Endpoints declare explicit scopes (`order:*`, `execution:*`,
 `account:*`, `enrichment:*`, `allocation:process`) and role/ownership rules enforced server-side;
 investor tokens can only see their own resources (unowned resources return `404`, never revealing
-existence). Machine-to-machine calls use the OAuth 2.0 client-credentials grant.
+existence). Machine-to-machine calls use the OAuth 2.0 client-credentials grant. User and machine
+identities are kept separate — a user token never carries a machine scope and a machine token never
+carries a realm role — so privilege escalation and confused-deputy paths are closed. The full
+trust-boundary model, roles-vs-scopes-vs-audiences design, and the **enforced per-endpoint
+authorization matrix** are documented in [`SECURITY.md`](SECURITY.md);
+a live-Keycloak test suite imports the real realm and validates the mappings with real issued tokens.
 
 **Resilience.** Cross-service calls from the allocation-engine go through typed HTTP clients wrapped
 in Resilience4j retry and circuit breakers. Only transient transport failures (timeouts, connection
