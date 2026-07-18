@@ -6,6 +6,7 @@ import com.tradingcapture.allocation.client.InstrumentResolutionClient;
 import com.tradingcapture.allocation.client.TradingExecutionClient;
 import com.tradingcapture.allocation.client.TradingExecutionClient.ExecutionResolution;
 import com.tradingcapture.allocation.domain.model.AllocTransType;
+import com.tradingcapture.allocation.domain.model.IllegalAllocationTransitionException;
 import com.tradingcapture.allocation.domain.model.OrchestrationFailureCategory;
 import com.tradingcapture.allocation.domain.repository.RawMessageRepository;
 import com.tradingcapture.allocation.orchestration.OrchestrationReader.Snapshot;
@@ -85,6 +86,11 @@ public class AllocationOrchestrator {
         if (initial == null) {
             return OrchestrationOutcome.SKIPPED;
         }
+        // Redis dedup fast-path (ADR-0007): a hit is only a hint — the freshly-loaded snapshot is the
+        // authoritative confirmation, and the filter fails open, so a false positive never drops work.
+        if (dedupFilter.isLikelyProcessed(businessKey(initial)) && initial.status().isTerminal()) {
+            return OrchestrationOutcome.SKIPPED;
+        }
         String correlationId = resolveCorrelationId(initial.rawMessageId());
         MDC.put(CorrelationId.MDC_KEY, correlationId);
         try {
@@ -101,6 +107,14 @@ public class AllocationOrchestrator {
             metrics.driver("conflict");
             log.info("Orchestration concurrency conflict for allocationId={} (will be retried)", allocationId);
             return OrchestrationOutcome.RETRY_SCHEDULED;
+        } catch (IllegalAllocationTransitionException e) {
+            // Defense in depth: an unexpected illegal transition must not leave the row stuck
+            // non-terminal (retried forever). FAILED is legal from every working state.
+            metrics.driver("conflict");
+            log.error("Illegal transition during orchestration for allocationId={}: {} — escalating to FAILED",
+                    allocationId, e.getMessage());
+            return tx.commitFailed(allocationId, OrchestrationFailureCategory.INVARIANT_VIOLATION,
+                    "illegal state transition", "orchestrate");
         } finally {
             MDC.remove(CorrelationId.MDC_KEY);
         }
@@ -208,7 +222,7 @@ public class AllocationOrchestrator {
         boolean emitSettlement = a.transType() != AllocTransType.CANCEL;
         OrchestrationOutcome outcome = tx.commitCompleted(a.id(), correlationId, emitSettlement);
         if (outcome == OrchestrationOutcome.COMPLETED) {
-            dedupFilter.markProcessed(a.allocId() + ":" + a.transType().code());
+            dedupFilter.markProcessed(businessKey(a));
         }
         return outcome;
     }
@@ -263,6 +277,10 @@ public class AllocationOrchestrator {
         return errors.stream().limit(5)
                 .map(e -> e.code().name() + (e.identifier().isBlank() ? "" : "(" + e.identifier() + ")"))
                 .reduce((x, y) -> x + "; " + y).orElse("business validation failed");
+    }
+
+    private static String businessKey(Snapshot a) {
+        return a.allocId() + ":" + a.transType().code();
     }
 
     private String resolveCorrelationId(Long rawMessageId) {

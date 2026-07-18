@@ -16,9 +16,10 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * OAuth2 resource-server configuration (ADR-0008) via the shared
  * {@link ResourceServerSecuritySupport} (issuer + audience {@code allocation-engine}
- * validation, problem-shaped 401/403). Phase 7 exposes NO business endpoints — the service
- * is Kafka-driven — so only actuator health/info is public and everything else requires a
- * valid token; Phase 8+ endpoints will declare their scopes here.
+ * validation, problem-shaped 401/403). The allocation-engine remains Kafka-driven and exposes
+ * NO inbound business HTTP endpoints (Phase 8 orchestration calls out to trading/account/enrichment
+ * as a machine client), so only actuator health/info is public and everything else requires a valid
+ * token; any future inbound endpoint would declare its scope here.
  */
 @Configuration
 @EnableWebSecurity

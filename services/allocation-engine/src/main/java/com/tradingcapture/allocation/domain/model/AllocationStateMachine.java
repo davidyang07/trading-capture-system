@@ -39,12 +39,16 @@ public final class AllocationStateMachine {
     static {
         LEGAL.put(AllocationStatus.RECEIVED, Set.of(
                 AllocationStatus.VALIDATED, AllocationStatus.REJECTED, AllocationStatus.FAILED));
+        // REJECTED is reachable from VALIDATED and EXECUTIONS_RELEASED too: a business rule can only
+        // be decided at the allocate step (executions are re-resolved there, so availability may have
+        // dropped, or trading-service may return an allocation conflict). Such an allocate-time
+        // business rejection is a legal terminal, not a stuck state.
         LEGAL.put(AllocationStatus.VALIDATED, Set.of(
                 AllocationStatus.EXECUTIONS_ALLOCATED, AllocationStatus.EXECUTIONS_RELEASED,
-                AllocationStatus.FAILED));
+                AllocationStatus.REJECTED, AllocationStatus.FAILED));
         LEGAL.put(AllocationStatus.EXECUTIONS_RELEASED, Set.of(
                 AllocationStatus.EXECUTIONS_ALLOCATED, AllocationStatus.COMPLETED,
-                AllocationStatus.FAILED));
+                AllocationStatus.REJECTED, AllocationStatus.FAILED));
         LEGAL.put(AllocationStatus.EXECUTIONS_ALLOCATED, Set.of(
                 AllocationStatus.COMPLETED, AllocationStatus.EXECUTIONS_RELEASED,
                 AllocationStatus.FAILED));

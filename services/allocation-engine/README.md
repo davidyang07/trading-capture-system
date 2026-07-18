@@ -48,33 +48,137 @@ Retries are non-blocking `@RetryableTopic`: 4 attempts, exponential 1 s → 4 s 
 
 Cross-service (logical) validation is Phase 8.
 
-## Phase 8 orchestration (in progress)
+## Phase 8 orchestration
 
-State machine, persistence, dependency clients, and logical validation are implemented; execution
-selection, the New/Replace/Cancel flows, Redis pre-filter, and the recovery driver are the next
-increments.
+Phase 7 stops at ingestion — instructions reach `RECEIVED` (or `INVALID`). Phase 8 takes over from
+`RECEIVED`: it validates the instruction against the other services, selects backing executions,
+binds/releases them in trading-service, and drives the allocation through the ADR-0006 state machine
+to a terminal state, emitting domain events through the transactional outbox. A single scheduled
+driver does this for both new work and crash recovery. Live Keycloak token acceptance and the
+allocation UI remain Phase 9 / Phase 10; Redis is an optimization only — the database is authoritative.
 
-- **State machine + persistence (ADR-0006):** `AllocationStateMachine` enforces the legal-transition
-  table; `V2__allocation_orchestration.sql` adds attempt/retry/failure bookkeeping, append-only
-  `allocation_state_transitions` history, and `allocation_assignments` (execution bindings, release
-  exactly once). Retryable-vs-terminal failure is **bookkeeping** (`attempt_count`, `next_attempt_at`,
-  `failure_category`), never a new state.
-- **M2M dependency clients (`client/`):** typed `TradingExecutionClient` (`/internal/v1/executions/resolve`
-  — external ExecID → internal id + eligibility), `AccountValidationClient` (`/internal/v1/accounts/batch`),
-  `InstrumentResolutionClient` (`/internal/v1/instruments/lookup`). Spring `RestClient` with per-service
-  base URL + connect/read timeouts, a machine **OAuth2 client-credentials** bearer (Spring Security
-  `OAuth2AuthorizedClientManager`, never logged), and `X-Correlation-ID` propagation from the MDC.
-  Business verdicts (inactive account, unresolved execution) are ordinary 200 results — never exceptions.
-- **Resilience4j (`RemoteCallExecutor`):** bounded retry + circuit breaker around each remote boundary.
-  Only transient transport failures (timeout, connection loss, 5xx/503) are retried and count toward
-  the breaker (`RetryableDependencyPredicate`); 4xx business/authorization results are neither retried
-  nor trip it. A circuit-open surfaces as a retryable `UNAVAILABLE`. `DependencyFailureType` maps to the
-  persisted `OrchestrationFailureCategory` so a failure can schedule a retry or escalate to terminal.
-  Metrics: `tcs.allocation.dep.calls{dependency,operation,outcome}` plus resilience4j-micrometer.
-- **Logical validation (`validation/logical/`):** staged (account → instrument → execution → quantity →
-  transaction-type), collecting all business errors deterministically ordered and de-duplicated.
-  `LogicalValidationResult` separates a business rejection from a retryable dependency failure, a
-  terminal dependency failure, and an invariant defect.
+### State machine (ADR-0006; diagram in `docs/architecture/event-flows.md`)
+
+Eight persisted states: `RECEIVED INVALID VALIDATED REJECTED EXECUTIONS_ALLOCATED
+EXECUTIONS_RELEASED COMPLETED FAILED` (terminals: `INVALID REJECTED COMPLETED FAILED`).
+`AllocationStateMachine` holds the legal-transition table; `Allocation.transitionTo` rejects any
+illegal move (including out of a terminal) with `IllegalAllocationTransitionException` before mutating
+state, and appends an `allocation_state_transitions` history row. Lifecycles:
+
+- **New:** `RECEIVED → VALIDATED → EXECUTIONS_ALLOCATED → COMPLETED`.
+- **Replace:** `RECEIVED → VALIDATED → EXECUTIONS_RELEASED → EXECUTIONS_ALLOCATED → COMPLETED` (release
+  the original's executions, then allocate the replacement set).
+- **Cancel:** `RECEIVED → VALIDATED → EXECUTIONS_RELEASED → COMPLETED` (no settlement event).
+- **FAILED** is reachable from any working state when retries are exhausted.
+
+Retryable-vs-terminal is **bookkeeping**, never a new state: `attempt_count`, `max_attempts`,
+`last_attempt_at`, `next_attempt_at`, `failure_category` (`OrchestrationFailureCategory`), and a safe
+`failure_summary`.
+
+### Persistence (`V2__allocation_orchestration.sql`, `ddl-auto=validate`)
+
+- `allocations` gains the bookkeeping columns above plus `claimed_by`/`claimed_at` (driver lease),
+  `completed_at`, and `idx_allocations_next_attempt (status, next_attempt_at)` for recovery scans.
+- `allocation_state_transitions` — append-only history (`uq_alloc_transitions_seq`), never deleted.
+- `allocation_assignments` — one row per (allocation, execution) internal id
+  (`uq_alloc_assignments_execution`), `allocated_qty > 0`, `released_qty ∈ [0, allocated_qty]`, status
+  `ASSIGNED`/`RELEASED`. Release is exactly once (a second release throws; DB CHECK backs it).
+- Optimistic `@Version` on the allocation aggregate. No cross-service foreign keys.
+
+### Trading execution-resolution contract
+
+`POST /internal/v1/executions/resolve` (trading-service, scope `allocation:process`, machine-only)
+resolves the FIX `NoExecs` external ExecIDs (tag 17) to internal executions plus an eligibility
+verdict (`ELIGIBLE`/`NOT_FOUND`/`CANCELLED`/`SUPERSEDED`/`ALREADY_ALLOCATED`) and the fields selection
+needs. Read-only, per-item (an unknown id is `NOT_FOUND`, never a 4xx); investor/user tokens get 403.
+Contract of record: `contracts/openapi/trading-service.openapi.yaml`.
+
+### Dependency clients + resilience (`client/`)
+
+Typed `TradingExecutionClient` (resolve + idempotent allocate/release), `AccountValidationClient`
+(`/internal/v1/accounts/batch`), `InstrumentResolutionClient` (`/internal/v1/instruments/lookup`),
+each on a Spring `RestClient` with per-service base URL + connect/read timeouts, a machine
+**OAuth2 client-credentials** bearer (Spring Security `OAuth2AuthorizedClientManager` — token never
+logged), and `X-Correlation-ID` propagated from the MDC. Business verdicts (inactive account,
+unresolved execution) are ordinary 200 results — never exceptions. `RemoteCallExecutor` wraps each call
+in the dependency's Resilience4j retry + circuit breaker: only transient transport failures
+(timeout / connection loss / 5xx / 503) are retried and counted toward the breaker
+(`RetryableDependencyPredicate`); 4xx business/authorization results are neither retried nor trip it; a
+circuit-open surfaces as a retryable `UNAVAILABLE`. `DependencyFailureType → OrchestrationFailureCategory`
+so a failure schedules a retry or escalates to terminal. Metrics:
+`tcs.allocation.dep.calls{dependency,operation,outcome}` + resilience4j-micrometer.
+
+### Logical validation (`validation/logical/`)
+
+Runs after resolution, over a framework-free `LogicalValidationContext` (no HTTP/JPA types). Stages,
+in deterministic order: **account** (exists/active/owner/cash/securities) → **instrument**
+(found/ambiguous/inactive/exchange/currency/settlement) → **execution** (not-found/cancelled/superseded/
+already-allocated/instrument+side match/allocatable qty/duplicate ref) → **quantity** (positive/
+precision/account-sum/aggregate-exec-qty) → **transaction-type** (New/Replace/Cancel prerequisites). All
+business errors are collected, de-duplicated, and ordered by stage → code → identifier.
+`LogicalValidationResult` separates `Valid`, `BusinessRejected`, `DependencyUnavailable` (retryable),
+`DependencyTerminal`, and `Invariant` — dependency failures are never mixed into the business-error
+list, and there is no catch-all "approve on error" fallback.
+
+### Deterministic execution selection (ADR-0017)
+
+`ExecutionSelector` chooses, from the resolved-execution snapshot, a set whose quantities sum exactly to
+the requested quantity. Total order independent of input order: execution `transactTime` → `execId` →
+`internalId`; greedy earliest-first fill (last execution may be partially consumed). Partial allocation
+is not permitted — insufficient eligible quantity is a typed `Insufficient`, never a partial success.
+`BigDecimal` scale 4, `RoundingMode.UNNECESSARY`, no floating point; scale > 4 is rejected. Selection is
+a pure snapshot calculation and does **not** reserve quantity — the mutation transaction re-reads
+authoritative state under optimistic locking and the idempotent trading allocate call is the final
+conflict boundary, so a stale selection fails safely and retries cannot over-allocate.
+
+### Orchestration flows (`orchestration/`)
+
+`AllocationOrchestrator` advances one allocation as state-guarded steps. Each step loads an immutable
+snapshot (short read tx), performs remote calls **outside** any mutating transaction, then commits an
+atomic mutation + same-transaction outbox row via `OrchestrationTx`:
+
+- **New:** validate → select → idempotent trading ALLOCATE → persist assignments + `EXECUTIONS_ALLOCATED`
+  + `ExecutionsAllocated` → `COMPLETED` + `SettlementRequested`. Rollback leaves no partial assignment,
+  transition, or event; a re-run is a no-op (status guards); executions already allocated to this allocId
+  are treated as ours, so a crash between the remote ALLOCATE and the local commit resumes cleanly.
+- **Replace:** validate against the referenced original → release the original's executions (idempotent
+  trading RELEASE, mark the original's assignments released) + `EXECUTIONS_RELEASED` +
+  `ExecutionsReleased` → select + allocate the replacement set → `EXECUTIONS_ALLOCATED` → `COMPLETED` +
+  `SettlementRequested`. A failure before the release commits leaves the original untouched.
+- **Cancel:** validate → release the original's executions + `EXECUTIONS_RELEASED` + `ExecutionsReleased`
+  → `COMPLETED` (no settlement). Released quantity becomes available exactly once; a repeated Cancel is a
+  no-op (already terminal) and emits no second release; history is preserved, never deleted.
+
+### Redis deduplication pre-filter (ADR-0007)
+
+`AllocationDedupFilter` — key namespace `tcs:alloc:dedup:<allocId>:<transType>`, TTL `tcs.orchestration.dedup-ttl`
+(30m). A hit is a hint to confirm against the database, never a blind discard, so a false positive cannot
+drop valid work; any Redis failure fails open (miss / best-effort write) and the DB unique constraints +
+per-allocation state remain authoritative. Metrics `tcs.allocation.dedup{result=hit|miss|error}`; the
+actuator Redis health contributor is disabled so an outage never fails readiness.
+
+### Orchestration + recovery driver (`OrchestrationDriver`, `OrchestrationClaimService`)
+
+One `@Scheduled` driver serves both normal orchestration and recovery — resuming from persisted state
+*is* the normal path. Each tick claims a bounded, id-ordered batch in a short transaction
+(`SELECT … FOR UPDATE SKIP LOCKED` so concurrent workers claim disjoint rows), stamps a worker lease
+(`claimed_by`/`claimed_at`) and increments the attempt counter, then commits before any remote call.
+Eligible = non-terminal, `attempt_count < max_attempts`, due (`next_attempt_at` null or past), and not
+actively leased (`claimed_at` null or older than the lease). It skips terminal/exhausted/not-yet-due/
+leased rows; an expired lease is reclaimed. Retryable failures schedule an exponential backoff; exhausted
+attempts escalate to `FAILED`. Metrics `tcs.allocation.orchestration.{steps,driver}` and
+`tcs.allocation.dedup` are all low-cardinality (no allocation/account/execution/correlation ids as tags).
+
+### Phase 8 outbox events (ADR-0005)
+
+`AllocationValidated`, `ExecutionsAllocated`, `ExecutionsReleased`, `SettlementRequested` — recorded in
+the same transaction as the state change (hard-guarded), Kafka key = business `allocId` (deterministic
+per-allocation ordering), full metadata with correlation + causation (the inbound raw message), decimal
+fidelity at scale 4. Execution identifiers in events are the internal execution ids stored on the
+assignments (the ExecID→internal mapping is resolved once at orchestration entry), so they are stable and
+identical across a New's `ExecutionsAllocated` and a later Replace/Cancel's `ExecutionsReleased`. Duplicate
+events are impossible on retry/replay because the emitting transition is state-guarded and the outbox row
+carries a unique event id.
 
 ## Configuration
 
@@ -83,6 +187,8 @@ Env overrides (defaults in `application.yml`): `ALLOCATION_DB_HOST/PORT/NAME/USE
 Security: OAuth2 resource server via `libs/security-support` (issuer + audience `allocation-engine`); only actuator health/info is public. Metrics: `tcs.allocation.ingest.*` (consumed, accepted, rejected, parse_failed, unsupported_type, duplicate_delivery, duplicate_business, retried_delivery, dead_lettered, outbox_published, outbox_publish_failed). Correlation: `x-correlation-id` Kafka header → MDC → outbox → event metadata + headers.
 
 Phase 8 M2M clients: `tcs.clients.{account,enrichment,trading}.{base-url,connect-timeout,read-timeout}` (env `ACCOUNT_SERVICE_URL`/`ENRICHMENT_SERVICE_URL`/`TRADING_SERVICE_URL`), `resilience4j.retry|circuitbreaker.instances.{account,enrichment,trading}`, and a machine OAuth2 client registration `allocation-engine` (client-credentials; scopes `allocation:process,account:validate,enrichment:read`; secret from env — `ALLOCATION_CLIENT_SECRET`, dev placeholder only; live token flow lands in Phase 9). Dependency metrics: `tcs.allocation.dep.calls{dependency,operation,outcome}`. Access tokens / Authorization headers are never logged.
+
+Phase 8 orchestration/recovery driver: `tcs.orchestration.*` — `enabled` (default true; env `ORCHESTRATION_ENABLED`; tests disable it and drive `OrchestrationDriver.runOnce()` directly), `poll-interval` (1s), `batch-size` (20), `claim-lease` (2m), `retry-backoff-base`/`-multiplier`/`-max` (5s / 2.0 / 10m), `max-steps-per-run` (6), `dedup-ttl` (30m). Redis: `spring.data.redis.host`/`port` (env `REDIS_HOST`/`REDIS_PORT`); `management.health.redis.enabled=false` so a Redis outage never fails readiness. Orchestration metrics: `tcs.allocation.orchestration.steps{step,outcome}`, `tcs.allocation.orchestration.driver{event}`, `tcs.allocation.dedup{result}` — all low-cardinality.
 
 ## Testing
 
