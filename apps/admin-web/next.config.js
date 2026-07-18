@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
-// Recreated for this project (the reference config carried course URLs, disabled
-// React strict mode, and suppressed ESLint during builds — none of that is kept).
+// Minimal config for this project: React strict mode on, no ESLint suppression at build.
 // Backend base URLs intentionally absent: Phase 10 replaces direct calls with the
 // Auth.js BFF proxy (ADR-0010).
 const nextConfig = {

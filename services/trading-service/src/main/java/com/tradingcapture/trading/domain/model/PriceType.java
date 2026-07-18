@@ -1,8 +1,7 @@
 package com.tradingcapture.trading.domain.model;
 
 /**
- * Price type, persisted with the code mapping ported from the reference domain
- * (PERCENTAGE=0, PER_UNIT=1, FIXED_AMOUNT=2).
+ * Price type, persisted with the code mapping (PERCENTAGE=0, PER_UNIT=1, FIXED_AMOUNT=2).
  */
 public enum PriceType {
     PERCENTAGE("0"),

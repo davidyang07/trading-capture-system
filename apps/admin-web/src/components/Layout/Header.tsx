@@ -57,8 +57,7 @@ export const Header = () => {
         <div className="layout-topbar-desc">
           <p className="layout-topbar-title">Trading Capturing System</p>
           <p className="layout-topbar-subtitle">
-            <span>Drill inslignt - </span>
-            <span>Java Full Stack</span>
+            <span>Distributed Trading Platform</span>
           </p>
         </div>
       </div>

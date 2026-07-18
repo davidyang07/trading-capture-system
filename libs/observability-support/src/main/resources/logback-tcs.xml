@@ -3,7 +3,6 @@
   Shared logging configuration included by every service's logback-spring.xml.
   Default profile: human-readable console with correlationId.
   Profile "json-logs": structured JSON (Logstash encoder) — used by docker-compose from Phase 11.
-  Pattern ported from the reference audit-utils logback-common.xml.
 -->
 <included>
     <appender name="CONSOLE_TEXT" class="ch.qos.logback.core.ConsoleAppender">

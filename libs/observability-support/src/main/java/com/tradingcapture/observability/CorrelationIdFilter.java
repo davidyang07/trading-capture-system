@@ -13,8 +13,7 @@ import java.util.UUID;
 /**
  * Accepts an inbound {@code X-Correlation-ID} header or generates one, exposes it as the
  * {@code correlationId} MDC entry for the duration of the request, and echoes it on the
- * response so callers can correlate across services. Pattern ported from the reference
- * audit-utils library (HttpMDCHandlerInterceptor), modernized to a servlet filter.
+ * response so callers can correlate across services. Implemented as a servlet filter.
  */
 public class CorrelationIdFilter extends OncePerRequestFilter {
 

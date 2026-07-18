@@ -9,7 +9,7 @@ Contract of record for Phases 6–8. Schemas live exclusively in `libs/event-con
 - Partitions (local): 3. Key = aggregate ID (per-aggregate ordering).
 - Envelope: every event embeds `EventMetadata { eventId: uuid-string, eventType: string, schemaVersion: int, occurredAt: timestamp-millis, correlationId: string, causationId: nullable string, aggregateId: string }`.
 - Headers: `x-correlation-id`, `x-causation-id`, `x-event-id` mirror the metadata for header-only consumers.
-- Producer settings: `acks=all`, idempotent producer, compression (carried from the reference `drill.kafka` producer profile).
+- Producer settings: `acks=all`, idempotent producer, compression.
 - Delivery: at-least-once via transactional outbox (ADR-0005); consumers dedupe on `eventId`.
 
 ## Inbound
@@ -32,7 +32,7 @@ Contract of record for Phases 6–8. Schemas live exclusively in `libs/event-con
 
 ## Consumers of outbound events
 
-Within this system the outbound topics are integration contracts: consumed by integration/contract tests and demo console consumers, and documented as feeds for the external back-office, settlement, and exception-monitoring systems that the reference architecture assumed (its config declared `backOffice` and `exMon` topic destinations). No internal service consumes them for state — allocation → trading state updates are synchronous REST by design (read-your-writes for smart selection; see event-flows.md).
+Within this system the outbound topics are integration contracts: consumed by integration/contract tests and demo console consumers, and documented as feeds for external back-office, settlement, and exception-monitoring systems. No internal service consumes them for state — allocation → trading state updates are synchronous REST by design (read-your-writes for smart selection; see event-flows.md).
 
 ## Retention & schema evolution assumptions
 
