@@ -2,7 +2,11 @@ package com.tradingcapture.allocation.outbox;
 
 import com.tradingcapture.events.AllocationReceived;
 import com.tradingcapture.events.AllocationRejected;
+import com.tradingcapture.events.AllocationValidated;
 import com.tradingcapture.events.ExceptionReported;
+import com.tradingcapture.events.ExecutionsAllocated;
+import com.tradingcapture.events.ExecutionsReleased;
+import com.tradingcapture.events.SettlementRequested;
 import org.apache.avro.io.BinaryDecoder;
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.DecoderFactory;
@@ -30,7 +34,11 @@ public class AvroPayloadCodec {
     private static final Map<String, Class<? extends SpecificRecord>> EVENT_TYPES = Map.of(
             AllocationReceived.class.getSimpleName(), AllocationReceived.class,
             AllocationRejected.class.getSimpleName(), AllocationRejected.class,
-            ExceptionReported.class.getSimpleName(), ExceptionReported.class);
+            ExceptionReported.class.getSimpleName(), ExceptionReported.class,
+            AllocationValidated.class.getSimpleName(), AllocationValidated.class,
+            ExecutionsAllocated.class.getSimpleName(), ExecutionsAllocated.class,
+            ExecutionsReleased.class.getSimpleName(), ExecutionsReleased.class,
+            SettlementRequested.class.getSimpleName(), SettlementRequested.class);
 
     public byte[] encode(SpecificRecord event) {
         requireRegistered(event.getClass().getSimpleName());

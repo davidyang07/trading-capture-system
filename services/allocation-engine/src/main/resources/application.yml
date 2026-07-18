@@ -23,6 +23,26 @@ spring:
       resourceserver:
         jwt:
           issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/tcs}
+      # Machine (client-credentials) identity for the Phase 8 M2M clients. One confidential
+      # allocation-engine client carries every downstream audience/scope it needs; tokens are
+      # acquired + cached by Spring Security. The secret is a documented dev placeholder — the
+      # real value comes from the environment (never committed). Live token flow is Phase 9.
+      client:
+        registration:
+          allocation-engine:
+            provider: keycloak
+            client-id: ${ALLOCATION_CLIENT_ID:allocation-engine}
+            client-secret: ${ALLOCATION_CLIENT_SECRET:allocation-engine-dev-secret}
+            authorization-grant-type: client_credentials
+            scope: allocation:process,account:validate,enrichment:read
+        provider:
+          keycloak:
+            token-uri: ${OIDC_TOKEN_URI:http://localhost:8180/realms/tcs/protocol/openid-connect/token}
+  data:
+    redis:
+      # Phase 8 dedup pre-filter (ADR-0007). A Redis outage falls back safely to DB authority.
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:
@@ -64,6 +84,60 @@ tcs:
     batch-size: 50
     publish-timeout: 10s
     enabled: true
+  clients:
+    # Phase 8 M2M dependency base URLs + timeouts (registrationId defaults to allocation-engine).
+    account:
+      base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
+      connect-timeout: 2s
+      read-timeout: 5s
+    enrichment:
+      base-url: ${ENRICHMENT_SERVICE_URL:http://localhost:8083}
+      connect-timeout: 2s
+      read-timeout: 5s
+    trading:
+      base-url: ${TRADING_SERVICE_URL:http://localhost:8081}
+      connect-timeout: 2s
+      read-timeout: 5s
+  orchestration:
+    # Phase 8 driver (ADR-0006): one scheduled driver claims eligible work (new, due retries,
+    # expired leases) with FOR UPDATE SKIP LOCKED and advances each allocation. Tests disable the
+    # schedule and call runOnce() directly for determinism.
+    enabled: ${ORCHESTRATION_ENABLED:true}
+    poll-interval: 1s
+    batch-size: 20
+    claim-lease: 2m
+    retry-backoff-base: 5s
+    retry-backoff-multiplier: 2.0
+    retry-backoff-max: 10m
+    max-steps-per-run: 6
+    dedup-ttl: 30m
+
+# Resilience4j only wraps the remote HTTP boundaries. The retry/record predicate
+# (RetryableDependencyPredicate) ensures only transient DependencyCallExceptions are retried and
+# counted toward the breaker — 4xx business/authorization results are neither retried nor tripping.
+resilience4j:
+  retry:
+    instances:
+      account: &dependencyRetry
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exception-predicate: com.tradingcapture.allocation.client.RetryableDependencyPredicate
+      enrichment: *dependencyRetry
+      trading: *dependencyRetry
+  circuitbreaker:
+    instances:
+      account: &dependencyBreaker
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 3
+        record-exception-predicate: com.tradingcapture.allocation.client.RetryableDependencyPredicate
+      enrichment: *dependencyBreaker
+      trading: *dependencyBreaker
 
 management:
   endpoints:
@@ -74,3 +148,7 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    # A Redis outage must not fail readiness — the dedup pre-filter falls back to DB authority.
+    redis:
+      enabled: false

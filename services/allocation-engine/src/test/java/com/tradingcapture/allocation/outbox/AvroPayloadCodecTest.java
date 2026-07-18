@@ -43,8 +43,8 @@ class AvroPayloadCodecTest {
 
     @Test
     void unknownEventTypesFailLoudly() {
-        assertThatThrownBy(() -> codec.decode("SettlementRequested", new byte[0]))
+        assertThatThrownBy(() -> codec.decode("NotARegisteredEvent", new byte[0]))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("SettlementRequested");
+                .hasMessageContaining("NotARegisteredEvent");
     }
 }

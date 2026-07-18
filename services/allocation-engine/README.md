@@ -48,11 +48,41 @@ Retries are non-blocking `@RetryableTopic`: 4 attempts, exponential 1 s → 4 s 
 
 Cross-service (logical) validation is Phase 8.
 
+## Phase 8 orchestration (in progress)
+
+State machine, persistence, dependency clients, and logical validation are implemented; execution
+selection, the New/Replace/Cancel flows, Redis pre-filter, and the recovery driver are the next
+increments.
+
+- **State machine + persistence (ADR-0006):** `AllocationStateMachine` enforces the legal-transition
+  table; `V2__allocation_orchestration.sql` adds attempt/retry/failure bookkeeping, append-only
+  `allocation_state_transitions` history, and `allocation_assignments` (execution bindings, release
+  exactly once). Retryable-vs-terminal failure is **bookkeeping** (`attempt_count`, `next_attempt_at`,
+  `failure_category`), never a new state.
+- **M2M dependency clients (`client/`):** typed `TradingExecutionClient` (`/internal/v1/executions/resolve`
+  — external ExecID → internal id + eligibility), `AccountValidationClient` (`/internal/v1/accounts/batch`),
+  `InstrumentResolutionClient` (`/internal/v1/instruments/lookup`). Spring `RestClient` with per-service
+  base URL + connect/read timeouts, a machine **OAuth2 client-credentials** bearer (Spring Security
+  `OAuth2AuthorizedClientManager`, never logged), and `X-Correlation-ID` propagation from the MDC.
+  Business verdicts (inactive account, unresolved execution) are ordinary 200 results — never exceptions.
+- **Resilience4j (`RemoteCallExecutor`):** bounded retry + circuit breaker around each remote boundary.
+  Only transient transport failures (timeout, connection loss, 5xx/503) are retried and count toward
+  the breaker (`RetryableDependencyPredicate`); 4xx business/authorization results are neither retried
+  nor trip it. A circuit-open surfaces as a retryable `UNAVAILABLE`. `DependencyFailureType` maps to the
+  persisted `OrchestrationFailureCategory` so a failure can schedule a retry or escalate to terminal.
+  Metrics: `tcs.allocation.dep.calls{dependency,operation,outcome}` plus resilience4j-micrometer.
+- **Logical validation (`validation/logical/`):** staged (account → instrument → execution → quantity →
+  transaction-type), collecting all business errors deterministically ordered and de-duplicated.
+  `LogicalValidationResult` separates a business rejection from a retryable dependency failure, a
+  terminal dependency failure, and an invariant defect.
+
 ## Configuration
 
 Env overrides (defaults in `application.yml`): `ALLOCATION_DB_HOST/PORT/NAME/USER/PASSWORD`, `KAFKA_BOOTSTRAP_SERVERS` (localhost:9092), `SCHEMA_REGISTRY_URL` (http://localhost:8085), `OIDC_ISSUER`. Knobs: `tcs.outbox.*` (poll interval 500 ms, batch 50, publish timeout, `enabled` for tests), `tcs.ingest.retry.*` (attempts/backoff), `tcs.ingest.inbound-topic`.
 
 Security: OAuth2 resource server via `libs/security-support` (issuer + audience `allocation-engine`); only actuator health/info is public. Metrics: `tcs.allocation.ingest.*` (consumed, accepted, rejected, parse_failed, unsupported_type, duplicate_delivery, duplicate_business, retried_delivery, dead_lettered, outbox_published, outbox_publish_failed). Correlation: `x-correlation-id` Kafka header → MDC → outbox → event metadata + headers.
+
+Phase 8 M2M clients: `tcs.clients.{account,enrichment,trading}.{base-url,connect-timeout,read-timeout}` (env `ACCOUNT_SERVICE_URL`/`ENRICHMENT_SERVICE_URL`/`TRADING_SERVICE_URL`), `resilience4j.retry|circuitbreaker.instances.{account,enrichment,trading}`, and a machine OAuth2 client registration `allocation-engine` (client-credentials; scopes `allocation:process,account:validate,enrichment:read`; secret from env — `ALLOCATION_CLIENT_SECRET`, dev placeholder only; live token flow lands in Phase 9). Dependency metrics: `tcs.allocation.dep.calls{dependency,operation,outcome}`. Access tokens / Authorization headers are never logged.
 
 ## Testing
 
