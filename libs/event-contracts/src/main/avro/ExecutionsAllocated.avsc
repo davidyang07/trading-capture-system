@@ -1,0 +1,47 @@
+{
+    "type": "record",
+    "namespace": "com.tradingcapture.events",
+    "name": "ExecutionsAllocated",
+    "doc": "Executions were marked allocated in trading-service for this allocation (state EXECUTIONS_ALLOCATED, emitted from Phase 8 orchestration). Topic tcs.allocation.executions-allocated.v1, key = allocId.",
+    "fields": [
+        {
+            "name": "metadata",
+            "type": "com.tradingcapture.events.EventMetadata",
+            "doc": "Shared event envelope."
+        },
+        {
+            "name": "allocId",
+            "type": "string",
+            "doc": "Business allocation identifier (FIX tag 70, AllocID)."
+        },
+        {
+            "name": "executions",
+            "type": {
+                "type": "array",
+                "items": {
+                    "type": "record",
+                    "name": "AllocatedExecution",
+                    "doc": "One execution selected for this allocation.",
+                    "fields": [
+                        {
+                            "name": "executionId",
+                            "type": "string",
+                            "doc": "trading-service execution identifier (FIX tag 17, ExecID)."
+                        },
+                        {
+                            "name": "quantity",
+                            "type": {
+                                "type": "bytes",
+                                "logicalType": "decimal",
+                                "precision": 19,
+                                "scale": 4
+                            },
+                            "doc": "Allocated quantity from this execution. Decimal(19,4) (ADR-0014)."
+                        }
+                    ]
+                }
+            },
+            "doc": "The executions allocated, with their quantities."
+        }
+    ]
+}
