@@ -47,7 +47,9 @@ users, but an `INVESTOR` token carrying that scope alone is still forbidden. The
 requires `enrichment:read` or `allocation:process`. Missing/invalid tokens are 401, missing
 scope/role 403 — same RFC 7807 problem shape with `errorCode` and `correlationId`. Tokens must carry
 issuer `…/realms/tcs` **and** audience `enrichment-service` (realm `enrichment-service-aud`
-client scope).
+client scope). The enforced per-endpoint authorization matrix is in
+`SECURITY.md`; `LiveKeycloakAuthorizationTest` proves it against a real
+Keycloak container with real issued tokens (Phase 9).
 
 Public paths: `/actuator/health*`, `/actuator/info`, `/v3/api-docs*`, `/swagger-ui*`.
 

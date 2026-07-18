@@ -53,7 +53,9 @@ the API contract of record and `docs/adr/ADR-0002` for the service-boundary deci
 Unowned resources answer **404** (existence is never revealed); missing/invalid tokens 401 and
 missing scope/role 403, all in the same RFC 7807 problem shape with `errorCode` and
 `correlationId`. Tokens must carry issuer `…/realms/tcs` **and** audience `account-service`
-(attached by the realm's `account-service-aud` client scope).
+(attached by the realm's `account-service-aud` client scope). The enforced per-endpoint
+authorization matrix is in `SECURITY.md`; `LiveKeycloakAuthorizationTest`
+proves it against a real Keycloak container with real issued tokens (Phase 9).
 
 Public paths (documented): `/actuator/health*`, `/actuator/info`, `/v3/api-docs*`, `/swagger-ui*`.
 

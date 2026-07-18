@@ -54,8 +54,10 @@ Phase 7 stops at ingestion — instructions reach `RECEIVED` (or `INVALID`). Pha
 `RECEIVED`: it validates the instruction against the other services, selects backing executions,
 binds/releases them in trading-service, and drives the allocation through the ADR-0006 state machine
 to a terminal state, emitting domain events through the transactional outbox. A single scheduled
-driver does this for both new work and crash recovery. Live Keycloak token acceptance and the
-allocation UI remain Phase 9 / Phase 10; Redis is an optimization only — the database is authoritative.
+driver does this for both new work and crash recovery. Live Keycloak M2M token acquisition (the
+`allocation-engine` client-credentials client + service-account scopes) is verified in Phase 9 via
+`SECURITY.md` and the live-Keycloak suites; the allocation UI remains
+Phase 10; Redis is an optimization only — the database is authoritative.
 
 ### State machine (ADR-0006; diagram in `docs/architecture/event-flows.md`)
 
