@@ -3,7 +3,7 @@
 Status: Accepted (2026-07-14)
 
 ## Context
-Allocation state changes and their domain events must not diverge (no dual-write), and the brief bans distributed transactions. No reference implements any outbox.
+Allocation state changes and their domain events must not diverge (no dual-write), and distributed transactions are not an option.
 
 ## Decision
 allocation-engine writes an `outbox_event` row (id, aggregate type/id, event type, topic, key, serialized payload, headers, created_at, published_at, attempts) **in the same MySQL transaction** as the state change. A `@Scheduled` poller (~500 ms, batched, ordered by id) publishes pending rows to Kafka (`acks=all`) and marks them published. Delivery is at-least-once; consumers deduplicate by `EventMetadata.eventId`.

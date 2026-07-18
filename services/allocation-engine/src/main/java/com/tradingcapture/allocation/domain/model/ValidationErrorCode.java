@@ -1,8 +1,7 @@
 package com.tradingcapture.allocation.domain.model;
 
 /**
- * Typed validation-error taxonomy (ADR-0012), modernized from the reference
- * {@code GenericFieldError}/{@code ErrorCodes} hierarchy. Codes are stable strings shared
+ * Typed validation-error taxonomy (ADR-0012). Codes are stable strings shared
  * verbatim with the {@code ValidationErrorDetail} event contract.
  */
 public enum ValidationErrorCode implements CodeEnum {

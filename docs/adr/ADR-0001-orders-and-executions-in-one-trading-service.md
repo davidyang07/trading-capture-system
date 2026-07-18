@@ -3,7 +3,7 @@
 Status: Accepted (2026-07-14)
 
 ## Context
-Execution capture must atomically update order state (status, cumulative/leaves quantities), and correction/cancellation chains reference both orders and prior executions. The references kept them together in one backend (`deployment-tcs-exec-backend`).
+Execution capture must atomically update order state (status, cumulative/leaves quantities), and correction/cancellation chains reference both orders and prior executions. They are tightly coupled and naturally belong in one backend.
 
 ## Decision
 One `trading-service` owns orders and executions in one schema (`tcs_trading`), so the highest-frequency invariant (execution write ⇄ order state) is a local ACID transaction.
