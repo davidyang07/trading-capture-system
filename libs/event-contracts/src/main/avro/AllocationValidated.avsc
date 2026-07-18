@@ -1,0 +1,31 @@
+{
+    "type": "record",
+    "namespace": "com.tradingcapture.events",
+    "name": "AllocationValidated",
+    "doc": "An allocation passed logical (cross-service) validation and reached state VALIDATED (emitted from Phase 8 orchestration). Topic tcs.allocation.allocation-validated.v1, key = allocId.",
+    "fields": [
+        {
+            "name": "metadata",
+            "type": "com.tradingcapture.events.EventMetadata",
+            "doc": "Shared event envelope."
+        },
+        {
+            "name": "allocId",
+            "type": "string",
+            "doc": "Business allocation identifier (FIX tag 70, AllocID)."
+        },
+        {
+            "name": "orderIds",
+            "type": {
+                "type": "array",
+                "items": "string"
+            },
+            "doc": "Order identifiers referenced by the allocation's NoOrders group."
+        },
+        {
+            "name": "accountCount",
+            "type": "int",
+            "doc": "Number of validated allocation accounts (NoAllocs group entries)."
+        }
+    ]
+}

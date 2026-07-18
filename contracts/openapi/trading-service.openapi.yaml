@@ -277,6 +277,28 @@ paths:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
 
+  /internal/v1/executions/resolve:
+    post:
+      tags: [allocation-machine]
+      summary: Resolve external ExecIDs to internal executions + allocation eligibility (scope allocation:process)
+      description: >
+        Phase 8 contract closing the ExecID→internal-id gap. Read-only; each requested ExecID
+        resolves independently (an unknown id is a per-item NOT_FOUND, never a 4xx).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ExecutionResolutionRequest' }
+      responses:
+        "200":
+          description: Per-item resolutions
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecutionResolutionResponse' }
+        "400": { $ref: '#/components/responses/ValidationError' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
@@ -566,3 +588,44 @@ components:
               internalId: { type: string }
               allocationState: { $ref: '#/components/schemas/AllocationState' }
               allocationId: { type: string, nullable: true }
+
+    ExecutionResolutionRequest:
+      type: object
+      required: [execIds]
+      properties:
+        execIds:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { type: string, maxLength: 64 }
+          description: External FIX ExecIDs (tag 17) from the allocation instruction's NoExecs group
+
+    ExecutionResolutionResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          description: Per-item verdicts, in the same order and multiplicity as the requested ExecIDs
+          items:
+            type: object
+            properties:
+              execId: { type: string }
+              found: { type: boolean }
+              internalId: { type: string, nullable: true }
+              orderId: { type: string, nullable: true }
+              instrumentId: { type: string, nullable: true }
+              accountId: { type: string, nullable: true }
+              side: { type: string, nullable: true, description: FIX Side(54) code }
+              executedQuantity: { type: string, nullable: true, description: Decimal(19,4) }
+              allocatableQuantity: { type: string, nullable: true, description: Decimal(19,4); 0 when not eligible }
+              currency: { type: string, nullable: true }
+              tradeDate: { type: string, format: date, nullable: true }
+              settleType: { type: string, nullable: true, description: FIX SettlType(63) code }
+              settleDate: { type: string, format: date, nullable: true }
+              transactTime: { type: string, format: date-time, nullable: true }
+              allocationState: { type: string, nullable: true, enum: [UNALLOCATED, ALLOCATED] }
+              allocationId: { type: string, nullable: true }
+              eligible: { type: boolean }
+              reason:
+                type: string
+                enum: [ELIGIBLE, NOT_FOUND, CANCELLED, SUPERSEDED, ALREADY_ALLOCATED]

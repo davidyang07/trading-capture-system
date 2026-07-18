@@ -11,7 +11,10 @@ while ($true) {
     if ($LASTEXITCODE -ne 0 -or -not $lines) { throw "docker compose ps failed - is the stack up?" }
     $services = $lines | ForEach-Object { $_ | ConvertFrom-Json }
     $pending = @($services | Where-Object { $_.Health -and $_.Health -ne "healthy" })
-    $broken  = @($services | Where-Object { $_.State -eq "exited" -or $_.Health -eq "unhealthy" })
+    # One-shot init services (kafka-init) exit 0 by design - only a non-zero exit is broken.
+    $broken  = @($services | Where-Object {
+        ($_.State -eq "exited" -and $_.ExitCode -ne 0) -or $_.Health -eq "unhealthy"
+    })
     if ($broken.Count -gt 0) {
         $names = ($broken | ForEach-Object { $_.Service }) -join ", "
         throw "Containers failed: $names. Inspect with: docker compose logs $names"

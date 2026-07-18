@@ -1,0 +1,51 @@
+{
+    "type": "record",
+    "namespace": "com.tradingcapture.events",
+    "name": "AllocationReceived",
+    "doc": "A FIX AllocationInstruction (35=J) parsed and field-validated successfully; the allocation is persisted in state RECEIVED. Topic tcs.allocation.allocation-received.v1, key = allocId.",
+    "fields": [
+        {
+            "name": "metadata",
+            "type": "com.tradingcapture.events.EventMetadata",
+            "doc": "Shared event envelope."
+        },
+        {
+            "name": "allocId",
+            "type": "string",
+            "doc": "Business allocation identifier (FIX tag 70, AllocID)."
+        },
+        {
+            "name": "allocTransType",
+            "type": "string",
+            "doc": "FIX tag 71 (AllocTransType) code: 0=New, 1=Replace, 2=Cancel."
+        },
+        {
+            "name": "side",
+            "type": "string",
+            "doc": "FIX tag 54 (Side) code, e.g. 1=Buy, 2=Sell."
+        },
+        {
+            "name": "quantity",
+            "type": {
+                "type": "bytes",
+                "logicalType": "decimal",
+                "precision": 19,
+                "scale": 4
+            },
+            "doc": "Total allocated quantity (FIX tag 53, Quantity). Decimal(19,4) — never floating point (ADR-0014)."
+        },
+        {
+            "name": "tradeDate",
+            "type": {
+                "type": "int",
+                "logicalType": "date"
+            },
+            "doc": "Trade date (FIX tag 75, TradeDate, LocalMktDate)."
+        },
+        {
+            "name": "rawMessageId",
+            "type": "long",
+            "doc": "allocation-engine raw_messages surrogate id of the inbound FIX message, for support and replay lookups."
+        }
+    ]
+}

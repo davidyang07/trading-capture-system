@@ -1,0 +1,50 @@
+{
+    "type": "record",
+    "namespace": "com.tradingcapture.events",
+    "name": "EventMetadata",
+    "doc": "Shared event envelope embedded as the first field of every TCS domain event (ADR-0004; docs/contracts/event-catalog.md). Mirrored into the Kafka headers x-event-id / x-correlation-id / x-causation-id for header-only consumers.",
+    "fields": [
+        {
+            "name": "eventId",
+            "type": "string",
+            "doc": "Globally unique event identifier (UUID string). Consumers deduplicate on this value (at-least-once delivery, ADR-0005)."
+        },
+        {
+            "name": "eventType",
+            "type": "string",
+            "doc": "Simple event name, e.g. AllocationReceived. Matches the Avro record name of the enclosing event."
+        },
+        {
+            "name": "schemaVersion",
+            "type": "int",
+            "doc": "Major contract version of the enclosing event. Matches the v<major> suffix of the topic the event is published to."
+        },
+        {
+            "name": "occurredAt",
+            "type": {
+                "type": "long",
+                "logicalType": "timestamp-millis"
+            },
+            "doc": "UTC instant at which the state change described by this event was committed."
+        },
+        {
+            "name": "correlationId",
+            "type": "string",
+            "doc": "End-to-end correlation identifier propagated from the inbound trigger (HTTP header or Kafka header x-correlation-id)."
+        },
+        {
+            "name": "causationId",
+            "type": [
+                "null",
+                "string"
+            ],
+            "default": null,
+            "doc": "Identifier of the direct cause: the raw inbound message id for first-level events, or the eventId of the triggering event. Null when no upstream cause is known."
+        },
+        {
+            "name": "aggregateId",
+            "type": "string",
+            "doc": "Business identifier of the aggregate the event describes (allocation id, or raw-message reference for parse-only failures). Also used as the Kafka message key for per-aggregate ordering."
+        }
+    ]
+}

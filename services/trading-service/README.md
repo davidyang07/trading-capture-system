@@ -51,6 +51,13 @@ for the API contract of record and `docs/adr/ADR-0016` for the Phase 3 domain de
 | `POST /api/v1/executions`, `/correct`, `/cancel` | `execution:write` | **+ role ADMIN** (operational function) |
 | `GET /api/v1/executions`, `/{id}` | `execution:read` | ADMIN/machine: all; INVESTOR: own orders only |
 | `PUT /internal/v1/executions/allocation-state` | `allocation:process` | machine clients only |
+| `POST /internal/v1/executions/resolve` | `allocation:process` | machine clients only |
+
+The Phase 8 `/internal/v1/executions/resolve` endpoint resolves external FIX ExecIDs (tag 17) to
+internal executions plus an allocation-eligibility verdict (`ELIGIBLE`, `NOT_FOUND`, `CANCELLED`,
+`SUPERSEDED`, `ALREADY_ALLOCATED`), so the allocation-engine can bind by internal id. It is
+read-only and per-item (an unknown id is a `NOT_FOUND` item, never a batch failure), and exposes
+only the fields allocation selection/validation need — no full execution disclosure.
 
 Unowned resources answer **404** (existence is never revealed); missing/invalid tokens 401
 and missing scope/role 403, all in the same RFC 7807 problem shape with `errorCode` and

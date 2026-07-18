@@ -1,5 +1,5 @@
-# Trading Capture System — local development infrastructure (Phase 2 scope).
-# Grows per phase: Kafka + Schema Registry arrive in Phase 6, Prometheus + Grafana in Phase 11,
+# Trading Capture System — local development infrastructure (Phase 6 scope).
+# Grows per phase: Kafka + Schema Registry arrived in Phase 6, Prometheus + Grafana in Phase 11,
 # application services once they have runnable features (Phase 3+).
 # All credentials below are documented local-development values only (see .env.example).
 
@@ -61,6 +61,99 @@ services:
       timeout: 5s
       retries: 18
       start_period: 30s
+
+  # --- Kafka + Schema Registry (Phase 6, ADR-0004) -------------------------------------
+  # Single-node KRaft broker. Deliberately no data volume: local topic data is disposable
+  # runtime state, and an ephemeral log directory avoids stale-CLUSTER_ID mismatches when
+  # the stack is recreated. Topics are (re-)created deterministically by kafka-init.
+  kafka:
+    image: confluentinc/cp-kafka:7.9.1
+    container_name: tcs-kafka
+    environment:
+      # Fixed, documented KRaft cluster id (base64 UUID form) — a dev constant, not a secret.
+      CLUSTER_ID: TcsLocalDevClusterIdAA
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      # Internal listener for containers (kafka:29092), host listener on localhost:9092.
+      KAFKA_LISTENERS: PLAINTEXT://:29092,CONTROLLER://:29093,PLAINTEXT_HOST://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:${KAFKA_HOST_PORT:-9092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      # Single-broker dev values; production sizing is a Phase 13 concern.
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # Topics are created explicitly (kafka-init / spring-kafka admin) — never implicitly.
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+    ports:
+      - "${KAFKA_HOST_PORT:-9092}:9092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 30s
+
+  # One-shot topic registration: the deterministic topic catalog from
+  # docs/contracts/event-catalog.md (inbound + retry/DLT + 7 outbound domain topics).
+  kafka-init:
+    image: confluentinc/cp-kafka:7.9.1
+    container_name: tcs-kafka-init
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["bash", "-c"]
+    command:
+      - |
+        set -euo pipefail
+        topics=(
+          tcs.fix.allocation-instruction.v1
+          tcs.fix.allocation-instruction.v1-retry-0
+          tcs.fix.allocation-instruction.v1-retry-1
+          tcs.fix.allocation-instruction.v1-retry-2
+          tcs.fix.allocation-instruction.v1-dlt
+          tcs.allocation.allocation-received.v1
+          tcs.allocation.allocation-validated.v1
+          tcs.allocation.allocation-rejected.v1
+          tcs.allocation.executions-allocated.v1
+          tcs.allocation.executions-released.v1
+          tcs.allocation.exception-reported.v1
+          tcs.allocation.settlement-requested.v1
+        )
+        for topic in "$${topics[@]}"; do
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
+            --topic "$$topic" --partitions 3 --replication-factor 1
+        done
+        echo "Topic registration complete:"
+        kafka-topics --bootstrap-server kafka:29092 --list
+
+  # Confluent Schema Registry (ADR-0004): BACKWARD compatibility per subject,
+  # TopicNameStrategy subjects (<topic>-value). Host port 8085 (8081-8084 are services).
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.9.1
+    container_name: tcs-schema-registry
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+      # BACKWARD is also the registry default; pinned explicitly as the documented contract.
+      SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward
+    ports:
+      - "${SCHEMA_REGISTRY_HOST_PORT:-8085}:8081"
+    healthcheck:
+      # cp images ship no curl/wget; probe the REST listener from bash.
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8081 && echo -e 'GET /subjects HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200'"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
 
 volumes:
   mysql-data:
