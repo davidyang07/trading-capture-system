@@ -3,7 +3,7 @@
 Status: Accepted (2026-07-14)
 
 ## Context
-The reference course used Spring Cloud Gateway + Eureka + Config Server. The brief instructs: no gateway unless justified, no inflated service counts.
+A full gateway stack (Spring Cloud Gateway + Eureka + Config Server) was considered. Guiding principle: no gateway unless justified, and no inflated service counts.
 
 ## Decision
 No gateway. The Next.js BFF is the single browser-facing entry point (session termination + token relay); services are called directly by the BFF and by machine clients; Kubernetes Ingress performs path routing in-cluster.

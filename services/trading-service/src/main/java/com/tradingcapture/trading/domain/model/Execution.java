@@ -31,8 +31,8 @@ import java.util.List;
  * operational state owned by the allocation machine API and guarded by {@code @Version}.
  *
  * <p>The cumQty/leavesQty/avgPx/ordStatus columns are the server-derived aggregate snapshot
- * as of this event — clients never supply them (the reference implementation trusted the
- * client here; this design deliberately does not).</p>
+ * as of this event — clients never supply them; this design derives them server-side rather
+ * than trusting client-provided values.</p>
  */
 @Entity
 @Table(name = "executions")

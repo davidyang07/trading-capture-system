@@ -31,7 +31,7 @@ import java.util.List;
 /**
  * Execution capture and the append-only correction/cancellation chains.
  *
- * <p>Chain rules (ported conceptually from the reference implementations, hardened here):</p>
+ * <p>Chain rules:</p>
  * <ul>
  *   <li>Only the tip of a chain may be amended: a record that is already referenced by a
  *       correction/cancellation is superseded and immutable forever (also enforced by the
@@ -41,8 +41,7 @@ import java.util.List;
  *   <li>An execution currently bound to an allocation must be released by the
  *       allocation-engine before it can be amended.</li>
  *   <li>{@code rootExecutionId} is resolved at write time: the target's root, or the target
- *       itself when it starts a chain (the reference schema declared root_id but never
- *       populated it — this implementation persists it on every row).</li>
+ *       itself when it starts a chain (persisted on every row so chains stay fully queryable).</li>
  *   <li>cumQty / leavesQty / avgPx / order status are recomputed server-side from the active
  *       chain state inside the same transaction; the client's view of them is never trusted.
  *       The order row carries {@code @Version}, so two concurrent captures cannot both
@@ -218,8 +217,8 @@ public class ExecutionService {
                                       String text,
                                       Instant now) {
         Order order = target.getOrder();
-        // Safe root resolution, ported from the reference answer repo: the target's root, or
-        // the target itself if it started the chain. Persisted on every row (never null).
+        // Safe root resolution: the target's root, or the target itself if it started the
+        // chain. Persisted on every row (never null).
         String rootExecutionId = target.getRootExecutionId() != null
                 ? target.getRootExecutionId()
                 : target.getInternalId();

@@ -1,5 +1,3 @@
-# tcs-reference is intentionally stored outside this Git repository.
-
 # Environment variables and secrets
 .env
 .env.*

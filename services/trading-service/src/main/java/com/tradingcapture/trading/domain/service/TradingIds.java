@@ -2,7 +2,7 @@ package com.tradingcapture.trading.domain.service;
 
 import java.util.UUID;
 
-/** Business identifier generation (formats ported from the reference: {@code exec_<uuid>}). */
+/** Business identifier generation (format {@code exec_<uuid>}). */
 public final class TradingIds {
 
     private TradingIds() {
