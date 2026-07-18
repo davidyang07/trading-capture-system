@@ -30,9 +30,10 @@ class AllocationStateMachineTest {
             case RECEIVED -> EnumSet.of(AllocationStatus.VALIDATED, AllocationStatus.REJECTED,
                     AllocationStatus.FAILED);
             case VALIDATED -> EnumSet.of(AllocationStatus.EXECUTIONS_ALLOCATED,
-                    AllocationStatus.EXECUTIONS_RELEASED, AllocationStatus.FAILED);
+                    AllocationStatus.EXECUTIONS_RELEASED, AllocationStatus.REJECTED,
+                    AllocationStatus.FAILED);
             case EXECUTIONS_RELEASED -> EnumSet.of(AllocationStatus.EXECUTIONS_ALLOCATED,
-                    AllocationStatus.COMPLETED, AllocationStatus.FAILED);
+                    AllocationStatus.COMPLETED, AllocationStatus.REJECTED, AllocationStatus.FAILED);
             case EXECUTIONS_ALLOCATED -> EnumSet.of(AllocationStatus.COMPLETED,
                     AllocationStatus.EXECUTIONS_RELEASED, AllocationStatus.FAILED);
             case INVALID, REJECTED, COMPLETED, FAILED -> EnumSet.noneOf(AllocationStatus.class);

@@ -50,6 +50,8 @@ abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport
     @Autowired
     protected AllocationOrchestrator orchestrator;
     @Autowired
+    protected AllocationDedupFilter dedupFilter;
+    @Autowired
     protected JdbcTemplate jdbc;
 
     @DynamicPropertySource
@@ -152,6 +154,27 @@ abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport
         wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state")).willReturn(okJson("""
                 { "allocationId": "x", "action": "ALLOCATE", "appliedCount": 1, "executions": [] }
                 """)));
+    }
+
+    /** RELEASE succeeds; ALLOCATE returns a 409 conflict — a Replace fails only after the release commits. */
+    protected void stubReleaseOkAllocateConflict() {
+        wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state"))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.containing("RELEASE"))
+                .willReturn(okJson("""
+                        { "allocationId": "x", "action": "RELEASE", "appliedCount": 1, "executions": [] }
+                        """)));
+        wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state"))
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.containing("ALLOCATE"))
+                .willReturn(aResponse().withStatus(409)));
+    }
+
+    protected void stubAllocateConflict() {
+        wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state"))
+                .willReturn(aResponse().withStatus(409)));
+    }
+
+    protected void stubAccountsStatus(int status) {
+        wireMock.stubFor(post(urlEqualTo("/internal/v1/accounts/batch")).willReturn(aResponse().withStatus(status)));
     }
 
     // --- data fixtures -------------------------------------------------------------------------
