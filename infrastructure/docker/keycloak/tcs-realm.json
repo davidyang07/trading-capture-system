@@ -4,6 +4,7 @@
   "displayName": "Trading Capture System",
   "registrationAllowed": false,
   "sslRequired": "external",
+  "bruteForceProtected": true,
   "roles": {
     "realm": [
       {
@@ -17,6 +18,81 @@
     ]
   },
   "clientScopes": [
+    {
+      "name": "roles",
+      "description": "OpenID Connect scope: adds the user's realm roles to realm_access.roles",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "multivalued": "true",
+            "userinfo.token.claim": "false",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "name": "profile",
+      "description": "OpenID Connect built-in scope: profile (adds preferred_username)",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "name": "email",
+      "description": "OpenID Connect built-in scope: email",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "email",
+            "claim.name": "email",
+            "jsonType.label": "String",
+            "userinfo.token.claim": "true",
+            "id.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
+      ]
+    },
     {
       "name": "order:create",
       "description": "Create orders",
@@ -283,6 +359,36 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": true,
       "defaultClientScopes": [],
+      "optionalClientScopes": []
+    },
+    {
+      "clientId": "tcs-dev-cli",
+      "name": "TCS Dev CLI (development/test-only direct-grant client)",
+      "description": "DEV/TEST ONLY: direct-grant client for minting user tokens in local testing and the live-Keycloak suite. admin-web stays the only browser client (Auth Code + PKCE). Never enable in production.",
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "order:create",
+        "order:read",
+        "order:update",
+        "order:delete",
+        "execution:read",
+        "execution:write",
+        "account:admin",
+        "account:balance",
+        "enrichment:read",
+        "enrichment:admin",
+        "trading-service-aud",
+        "account-service-aud",
+        "enrichment-service-aud"
+      ],
       "optionalClientScopes": []
     }
   ],
