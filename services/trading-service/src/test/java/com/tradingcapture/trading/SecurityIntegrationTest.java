@@ -79,6 +79,19 @@ class SecurityIntegrationTest extends IntegrationTestSupport {
     void documentedPublicPathsNeedNoToken() throws Exception {
         mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
         mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk());
+        // Phase 11 (ADR-0015): the Prometheus scrape endpoint is a documented public metrics
+        // path so Prometheus can scrape without a token (it exposes only meters, never business
+        // data; env/beans/etc. stay locked down — see below). The scrape endpoint bean is not
+        // wired into this @SpringBootTest MockMvc slice, so we assert the *security* contract:
+        // the request is permitted (never 401/403). The live 200 is verified against a running
+        // service in the Phase 11 observability verification.
+        // Permitted (never 401/403); the scrape bean is not wired into this slice so the request
+        // reaches the dispatcher and 404s — that pins "permitted, not token-required" deterministically.
+        int prometheusStatus = mockMvc.perform(get("/actuator/prometheus"))
+                .andReturn().getResponse().getStatus();
+        org.assertj.core.api.Assertions.assertThat(prometheusStatus)
+                .as("/actuator/prometheus must be permitted without a token (404 in this slice, 200 live)")
+                .isEqualTo(404);
     }
 
     @Test

@@ -1,0 +1,101 @@
+{
+  "uid": "tcs-allocation-business",
+  "title": "TCS · Allocation & Trading Business",
+  "tags": ["tcs", "allocation", "business"],
+  "timezone": "utc",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Outbox backlog (unpublished)",
+      "datasource": { "type": "prometheus", "uid": "tcs-prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 25 } ] }
+        },
+        "overrides": []
+      },
+      "targets": [
+        { "refId": "A", "expr": "tcs_allocation_outbox_backlog", "legendFormat": "backlog" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Allocations accepted (total)",
+      "datasource": { "type": "prometheus", "uid": "tcs-prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        { "refId": "A", "expr": "sum(tcs_allocation_ingest_accepted_total)", "legendFormat": "accepted" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Orders created (total)",
+      "datasource": { "type": "prometheus", "uid": "tcs-prometheus" },
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "value" },
+      "targets": [
+        { "refId": "A", "expr": "sum(tcs_trading_orders_created_total)", "legendFormat": "orders" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Ingestion outcomes (rate/s)",
+      "datasource": { "type": "prometheus", "uid": "tcs-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(tcs_allocation_ingest_accepted_total[5m]))", "legendFormat": "accepted" },
+        { "refId": "B", "expr": "sum(rate(tcs_allocation_ingest_rejected_total[5m]))", "legendFormat": "rejected" },
+        { "refId": "C", "expr": "sum(rate(tcs_allocation_ingest_dead_lettered_total[5m]))", "legendFormat": "dead-lettered" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Outbox backlog over time",
+      "datasource": { "type": "prometheus", "uid": "tcs-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "tcs_allocation_outbox_backlog", "legendFormat": "backlog" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Executions recorded by type (rate/s)",
+      "datasource": { "type": "prometheus", "uid": "tcs-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum by (execType) (rate(tcs_trading_executions_recorded_total[5m]))", "legendFormat": "{{execType}}" }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Enrichment cache hit vs miss (rate/s)",
+      "datasource": { "type": "prometheus", "uid": "tcs-prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+      "fieldConfig": { "defaults": { "unit": "ops" }, "overrides": [] },
+      "targets": [
+        { "refId": "A", "expr": "sum(rate(tcs_enrichment_cache_hit_total[5m]))", "legendFormat": "hit" },
+        { "refId": "B", "expr": "sum(rate(tcs_enrichment_cache_miss_total[5m]))", "legendFormat": "miss" }
+      ]
+    }
+  ]
+}

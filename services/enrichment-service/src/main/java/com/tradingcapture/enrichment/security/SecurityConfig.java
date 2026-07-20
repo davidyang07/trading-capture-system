@@ -21,7 +21,8 @@ import org.springframework.security.web.SecurityFilterChain;
  * {@code enrichment:admin} (enforced per controller). The machine namespace {@code /internal/**}
  * requires {@code enrichment:read} or {@code allocation:process}.
  *
- * <p>Public paths: actuator health/info and the springdoc documentation UI.</p>
+ * <p>Public paths: actuator health/info, the Prometheus scrape endpoint (metrics only,
+ * ADR-0015), and the springdoc documentation UI.</p>
  */
 @Configuration
 @EnableWebSecurity
@@ -39,7 +40,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET,
-                                "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                                "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .requestMatchers("/internal/**")
