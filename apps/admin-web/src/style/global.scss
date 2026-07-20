@@ -89,6 +89,27 @@ body {
   overflow: auto;
 }
 
+@media (max-width: 900px) {
+  :root {
+    --header-height: 72px;
+  }
+
+  .main-container {
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .layout-navbar,
+  .main-right {
+    width: 100%;
+  }
+
+  .main-right {
+    overflow: visible;
+  }
+}
+
 .main-card-light {
   background-color: var(--color-white);
   border-radius: var(--border-radius);

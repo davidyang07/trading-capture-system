@@ -1,5 +1,7 @@
 .table-container {
   background-color: var(--color-white);
+  max-width: 100%;
+  overflow-x: auto;
 }
 
 .table-empty-box {

@@ -1,49 +1,43 @@
 "use client";
 import { BreadCrumb } from "primereact/breadcrumb";
+import type { MenuItem } from "primereact/menuitem";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { get } from "lodash-es";
-import { includes } from "lodash-es";
+import { useMemo } from "react";
 
-const routerNameMap = {
+const routerNameMap: Record<string, string> = {
   "/dashboard/": "Dashboard",
-  "/execution/": "Execution Management",
-  "/execution/create/": "Create Execution",
-  "/accounts/": "Accounts Management",
-  "/users/": "Users Management",
+  "/orders/": "Orders",
+  "/orders/new/": "New Order",
+  "/executions/": "Executions",
+  "/executions/new/": "Capture Execution",
+  "/accounts/": "Accounts",
+  "/accounts/new/": "New Account",
+  "/reference/": "Reference Data",
   "/403/": "",
 };
 
 export default function Breadcrumb() {
   const pathname = usePathname();
-  const [metaModal, setMetaModal] = useState<any>([]);
-
-  useEffect(() => {
-    const names = pathname.split("/").filter((p: any) => p);
-
-    const isFromSidebar =
-      names.length > 0 &&
-      (includes(names, "cancellation") || includes(names, "correction"));
-    isFromSidebar && names.splice(names.length - 1, 1);
-
-    const result = names.map((str: string, index: number) => {
+  const model = useMemo<MenuItem[]>(() => {
+    const names = pathname.split("/").filter(Boolean);
+    return names.map((segment, index) => {
       let path = "/";
       for (let i = 0; i <= index; i++) {
         path += `${names[i]}/`;
       }
       return {
         url: path,
-        label: get(routerNameMap, path, str),
-        disabled: isFromSidebar && index === names.length - 1,
+        label:
+          routerNameMap[path] ??
+          decodeURIComponent(segment).replace(/[-_]/g, " "),
       };
     });
-    setMetaModal(result);
   }, [pathname]);
 
   return (
     <>
       <BreadCrumb
-        model={metaModal}
+        model={model}
         style={{
           color: "#4B5563",
           border: "none",

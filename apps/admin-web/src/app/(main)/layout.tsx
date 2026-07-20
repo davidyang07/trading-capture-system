@@ -9,13 +9,16 @@ export default function MainLayout({
 }>) {
   return (
     <div>
+      <a href="#main-content" className="skip-link">
+        Skip to main content
+      </a>
       <Header />
       <div className="main-container">
         <Nav />
-        <div className="main-right">
+        <main id="main-content" className="main-right" tabIndex={-1}>
           <Breadcrumb />
           {children}
-        </div>
+        </main>
       </div>
     </div>
   );

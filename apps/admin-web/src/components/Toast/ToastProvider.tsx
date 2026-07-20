@@ -1,13 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useContext, useRef, type PropsWithChildren } from "react";
 import { Toast, ToastMessage } from "primereact/toast";
 
 export interface IToastProvider {
   showToast: (props?: ToastMessage | ToastMessage[]) => void;
-  successToast: (props?: ToastMessage | ToastMessage[]) => void;
-  errorToast: (props?: ToastMessage | ToastMessage[]) => void;
-  warningToast: (props?: ToastMessage | ToastMessage[]) => void;
+  successToast: (props?: ToastMessage) => void;
+  errorToast: (props?: ToastMessage) => void;
+  warningToast: (props?: ToastMessage) => void;
 }
 
 export const ToastContext = createContext<IToastProvider>({
@@ -17,12 +17,12 @@ export const ToastContext = createContext<IToastProvider>({
   warningToast: () => {},
 });
 
-export const ToastProvider = (props?: any) => {
+export const ToastProvider = ({ children }: PropsWithChildren) => {
   const toastRef = useRef<Toast>(null);
   const showToast = (props?: ToastMessage | ToastMessage[]) => {
     toastRef.current?.show(props ?? {});
   };
-  const successToast = (props?: ToastMessage | ToastMessage[]) => {
+  const successToast = (props?: ToastMessage) => {
     toastRef.current?.show({
       ...(props ?? {}),
       severity: "success",
@@ -30,7 +30,7 @@ export const ToastProvider = (props?: any) => {
       life: 2000,
     });
   };
-  const errorToast = (props?: ToastMessage | ToastMessage[]) => {
+  const errorToast = (props?: ToastMessage) => {
     toastRef.current?.show({
       ...(props ?? {}),
       severity: "error",
@@ -38,7 +38,7 @@ export const ToastProvider = (props?: any) => {
       life: 2000,
     });
   };
-  const warningToast = (props?: ToastMessage | ToastMessage[]) => {
+  const warningToast = (props?: ToastMessage) => {
     toastRef.current?.show({
       ...(props ?? {}),
       severity: "warn",
@@ -46,16 +46,6 @@ export const ToastProvider = (props?: any) => {
       life: 2000,
     });
   };
-
-  useEffect(() => {
-    if (!(window as any).$message) {
-      (window as any).$message = {
-        error: errorToast,
-        success: successToast,
-        warning: warningToast,
-      };
-    }
-  }, []);
 
   return (
     <ToastContext.Provider
@@ -67,7 +57,7 @@ export const ToastProvider = (props?: any) => {
       }}
     >
       <Toast ref={toastRef} />
-      {props.children}
+      {children}
     </ToastContext.Provider>
   );
 };

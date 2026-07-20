@@ -1,61 +1,35 @@
 "use client";
 
-import { useEffect } from "react";
 import Image from "next/image";
 import { Button } from "primereact/button";
-import { useAppDispatch, useAppSelector } from "@/store/hooks";
-import {
-  selectUserInfo,
-  updateUserInfo,
-  clearUserInfo,
-} from "@/store/user/userSlice";
-import { getCurrent } from "@/api/user";
-import { postLogout } from "@/api/auth";
-import { removeToken, setRedirectUri } from "@/utils/auth";
+import { useSession } from "next-auth/react";
+import { isAdmin } from "@/lib/permissions";
 import "./Header.scss";
 
 export const Header = () => {
-  const dispatch = useAppDispatch();
-  const currentUser = useAppSelector(selectUserInfo);
+  const { data: session, status } = useSession();
+  const username = session?.user?.username ?? session?.user?.name ?? "";
+  const role = isAdmin(session ?? null) ? "Administrator" : "Investor";
 
   const handleLogout = () => {
-    postLogout().then((res) => {
-      if (res?.serviceStatus?.success) {
-        removeToken();
-        dispatch(clearUserInfo());
-        if (res.data) {
-          setRedirectUri(window.location.href);
-          window.location.href = res.data;
-        }
-      }
-    });
+    // Server-side federated logout clears the cookie and ends the Keycloak session.
+    // A full-page navigation also drops all in-memory, user-scoped state.
+    window.location.assign("/api/auth/logout");
   };
-
-  const getCurrentUser = () => {
-    getCurrent().then((res) => {
-      if (res?.serviceStatus?.success) {
-        dispatch(updateUserInfo(res.data ?? {}));
-      }
-    });
-  };
-
-  useEffect(() => {
-    getCurrentUser();
-  }, []);
 
   return (
-    <div className="layout-top-bar">
+    <header className="layout-top-bar">
       <div className="layout-topbar-logo">
         <Image
-          src={`/logo.png`}
-          alt="Trading Capturing System Logo"
+          src="/logo.png"
+          alt=""
           className="logo-img"
           width={50}
           height={50}
           priority
         />
         <div className="layout-topbar-desc">
-          <p className="layout-topbar-title">Trading Capturing System</p>
+          <p className="layout-topbar-title">Trading Capture System</p>
           <p className="layout-topbar-subtitle">
             <span>Distributed Trading Platform</span>
           </p>
@@ -63,17 +37,20 @@ export const Header = () => {
       </div>
 
       <div className="layout-topbar-menu">
-        {currentUser?.userId && (
+        {status === "authenticated" && username ? (
           <>
             <Image
-              src={`/avatar.png`}
-              alt="Trading Capturing System User Avatar"
+              src="/avatar.png"
+              alt=""
               className="logo-img"
               width={31}
               height={31}
               priority
             />
-            <span>Welcome, {`${currentUser?.firstName} ${currentUser.lastName}`}</span>
+            <span>
+              {username}
+              <span className="layout-topbar-role"> · {role}</span>
+            </span>
             <Button
               label="Log out"
               severity="help"
@@ -81,8 +58,8 @@ export const Header = () => {
               onClick={handleLogout}
             />
           </>
-        )}
+        ) : null}
       </div>
-    </div>
+    </header>
   );
 };
