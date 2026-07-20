@@ -21,8 +21,9 @@ import org.springframework.security.web.SecurityFilterChain;
 /**
  * OAuth2 resource-server configuration (Spring Security 6, ADR-0008).
  *
- * <p>Public paths are exactly: actuator health/info (probes) and the springdoc
- * documentation UI — a documented development aid that exposes only the API contract.
+ * <p>Public paths are exactly: actuator health/info (probes), the actuator Prometheus
+ * scrape endpoint (metrics only, ADR-0015), and the springdoc documentation UI — a documented
+ * development aid that exposes only the API contract.
  * The machine namespace {@code /internal/**} requires the {@code allocation:process}
  * scope at the chain level in addition to method-level rules. Everything else needs a
  * verified JWT; fine-grained scope/role rules live on the controllers, ownership rules
@@ -43,7 +44,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET,
-                                "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                                "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .requestMatchers("/internal/**").hasAuthority("SCOPE_allocation:process")

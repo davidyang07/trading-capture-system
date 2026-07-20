@@ -1,0 +1,11 @@
+# Grafana datasource provisioning (Phase 11). Points at the Prometheus compose service.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: tcs-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
