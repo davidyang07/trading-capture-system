@@ -10,4 +10,7 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, Long> 
 
     /** Poller scan (ADR-0005): oldest unpublished rows first, bounded batch. */
     List<OutboxEvent> findByPublishedAtIsNullOrderByIdAsc(Limit limit);
+
+    /** Unpublished outbox rows — surfaced as the Phase 11 {@code tcs.allocation.outbox.backlog} gauge. */
+    long countByPublishedAtIsNull();
 }

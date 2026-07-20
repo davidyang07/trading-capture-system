@@ -20,7 +20,8 @@ import org.springframework.security.web.SecurityFilterChain;
  * shared {@link ResourceServerSecuritySupport}; this class only declares the service's own
  * path/scope rules.
  *
- * <p>Public paths are exactly actuator health/info (probes) and the springdoc documentation
+ * <p>Public paths are exactly actuator health/info (probes), the Prometheus scrape endpoint
+ * (metrics only, ADR-0015), and the springdoc documentation
  * UI. The machine namespace {@code /internal/**} requires a dedicated service scope — either
  * {@code account:validate} (trading-service) or {@code allocation:process} (allocation-engine).
  * That scope is granted only to the machine clients, never to the admin-web user client, so an
@@ -44,7 +45,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET,
-                                "/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                                "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         .requestMatchers("/internal/**")

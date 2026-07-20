@@ -1,0 +1,31 @@
+# Prometheus scrape configuration (Phase 11, ADR-0015).
+#
+# The four Spring Boot services run on the host until they are containerized in Phase 13, so
+# Prometheus (in a container) reaches them through host.docker.internal. Once the services join
+# the compose network in Phase 13, the targets become the service names on port 8080.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    stack: trading-capture-system
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: tcs-services
+    metrics_path: /actuator/prometheus
+    # Each service already emits an `application` common tag (ObservabilitySupportAutoConfiguration).
+    # honor_labels keeps that scraped label instead of renaming it to `exported_application`; the
+    # per-target `application` label below still labels the synthetic `up`/scrape metrics.
+    honor_labels: true
+    static_configs:
+      - targets: ["host.docker.internal:8081"]
+        labels: { application: trading-service }
+      - targets: ["host.docker.internal:8082"]
+        labels: { application: account-service }
+      - targets: ["host.docker.internal:8083"]
+        labels: { application: enrichment-service }
+      - targets: ["host.docker.internal:8084"]
+        labels: { application: allocation-engine }
