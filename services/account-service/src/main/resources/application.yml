@@ -32,6 +32,10 @@ tcs:
   security:
     # Tokens must carry this audience (attached by the realm's account-service-aud scope).
     audience: account-service
+    # Optional backchannel JWKS URL (containerized full stack — Phase 12, ADR-0018). Blank =
+    # discover JWKS from the issuer; iss is validated against issuer-uri either way. A TCS-owned
+    # key so Spring Boot's own JWKS auto-config never activates a second decoder.
+    jwk-set-uri: ${OIDC_JWK_SET_URI:}
 
 management:
   endpoints:

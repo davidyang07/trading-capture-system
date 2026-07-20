@@ -31,6 +31,12 @@
         <resilience4j.version>2.3.0</resilience4j.version>
         <!-- WireMock 3.x (standalone, shaded) for the Phase 8 M2M-client HTTP tests. -->
         <wiremock.version>3.9.2</wiremock.version>
+        <!-- Phase 12 JaCoCo gate. Kept false only while measuring baseline coverage; the
+             Phase 12 gate sets it to true so `./mvnw verify` fails below 80% line / 70% branch. -->
+        <jacoco.haltOnFailure>true</jacoco.haltOnFailure>
+        <!-- Pin the JaCoCo plugin (the Spring Boot parent does not manage it) so the coverage
+             gate is reproducible; 0.8.15 supports the JDK 21/24 used here. -->
+        <jacoco.version>0.8.15</jacoco.version>
     </properties>
 
     <!-- Confluent's serializer stack is not published to Maven Central. This is the one
@@ -58,6 +64,9 @@
         <module>services/account-service</module>
         <module>services/enrichment-service</module>
         <module>services/allocation-engine</module>
+        <!-- Phase 12: cross-service end-to-end scenarios. Compiles in the reactor; its tests
+             self-skip unless FULL_STACK=1 (the live stack must be up). Ships no production code. -->
+        <module>tests/full-system-tests</module>
     </modules>
 
     <dependencyManagement>
@@ -128,4 +137,70 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+
+    <build>
+        <plugins>
+            <!-- Phase 12: JaCoCo coverage gate (master-plan: 80% line / 70% branch, generated
+                 code excluded). The agent is attached to every module's test run; the report is
+                 written at verify; the check enforces the per-module gate. Generated Avro classes
+                 (com.tradingcapture.events.**) are excluded (they are build output, not authored
+                 code). Modules that ship only generated or test-only infrastructure set
+                 jacoco.skip in their own POM (documented there). Version is managed by the
+                 Spring Boot parent. -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>${jacoco.version}</version>
+                <configuration>
+                    <excludes>
+                        <exclude>com/tradingcapture/events/**</exclude>
+                    </excludes>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>jacoco-check</id>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>check</goal>
+                        </goals>
+                        <configuration>
+                            <!-- Flipped to true for the Phase 12 gate once every module meets
+                                 the threshold; kept false only during initial measurement. -->
+                            <haltOnFailure>${jacoco.haltOnFailure}</haltOnFailure>
+                            <rules>
+                                <rule>
+                                    <element>BUNDLE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.80</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.70</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

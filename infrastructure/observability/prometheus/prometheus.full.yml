@@ -1,0 +1,29 @@
+# Prometheus scrape configuration for the CONTAINERIZED full stack (Phase 12).
+# Used by docker-compose.full.yml, where the four services join the compose network and are
+# reachable by service name on their own ports (8081-8084). The base prometheus.yml keeps the
+# host.docker.internal targets for the Phase 11 host-run workflow; this file replaces it when
+# the full stack is up. (Phase 13 hardens the delivery path but the topology is unchanged.)
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  external_labels:
+    stack: trading-capture-system
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: tcs-services
+    metrics_path: /actuator/prometheus
+    # Each service emits an `application` common tag; honor_labels keeps it (see prometheus.yml).
+    honor_labels: true
+    static_configs:
+      - targets: ["trading-service:8081"]
+        labels: { application: trading-service }
+      - targets: ["account-service:8082"]
+        labels: { application: account-service }
+      - targets: ["enrichment-service:8083"]
+        labels: { application: enrichment-service }
+      - targets: ["allocation-engine:8084"]
+        labels: { application: allocation-engine }

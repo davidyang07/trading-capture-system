@@ -15,6 +15,12 @@
     <name>event-contracts</name>
     <description>Versioned Avro event schemas and generated classes (docs/contracts/event-catalog.md is the catalog of record)</description>
 
+    <properties>
+        <!-- Phase 12: the only main classes here are generated Avro (excluded from coverage) plus
+             two constant holders; nothing meaningful to gate — excluded from JaCoCo (ADR-0018). -->
+        <jacoco.skip>true</jacoco.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.apache.avro</groupId>

@@ -1,0 +1,37 @@
+# Per-Dockerfile build context for the service images (BuildKit uses this INSTEAD of the root
+# .dockerignore for this Dockerfile). A Java service image needs only the Maven reactor — the
+# frontend app, local docs, build output, and dependencies are never build inputs. Excluding
+# apps/ also avoids OneDrive "cloud-only" placeholder files under the frontend that BuildKit
+# cannot transfer (the repo's documented OneDrive limitation).
+apps/
+docs/
+.git/
+.github/
+.pnpm-store/
+.claude/
+**/target/
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+**/build/
+**/coverage/
+**/test-results/
+**/playwright-report/
+**/blob-report/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+AGENTS.md
+CLAUDE.md
+CLAUDE.local.md
+.idea/
+.vscode/
+*.iml
+*.log
