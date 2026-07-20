@@ -85,7 +85,9 @@ resumes from persisted state after a restart.
 - **Protocols:** QuickFIX/J (FIX 4.4 AllocationInstruction parsing)
 - **Testing:** JUnit 5, Mockito, Spring MockMvc slices, Testcontainers (MySQL, Kafka, Redis),
   WireMock (HTTP client tests)
-- **Frontend:** Next.js 14, TypeScript, Auth.js (admin operator application)
+- **Frontend:** Next.js 14 (App Router), TypeScript, Auth.js (Keycloak PKCE + BFF token
+  relay), react-final-form, PrimeReact; jest + Testing Library + jest-axe, Playwright
+  (see [`apps/admin-web/README.md`](apps/admin-web/README.md))
 - **Build & tooling:** Maven (multi-module aggregator), pnpm workspace, Docker Compose
 
 ---
@@ -219,10 +221,12 @@ Run everything with `./mvnw -B -ntp verify`, or a single module with
 
 Actively evolving areas layered on top of the platform above:
 
-- Operator web application: typed API clients and Auth.js session integration against the live
-  Keycloak flow.
+- Reliability and observability: frontend/server correlation proof, business metrics, and
+  Prometheus/Grafana dashboards (Phase 11).
 - Delivery: per-service container images, Kubernetes manifests, and a CI pipeline.
-- Observability: Prometheus/Grafana dashboards over the Micrometer metrics already emitted.
+- Full-system verification: compose-hosted application services and end-to-end scenario setup
+  (Phases 12–13). The frontend guide distinguishes deterministic UI E2E from the gated
+  live-service data-flow suite.
 
 ---
 

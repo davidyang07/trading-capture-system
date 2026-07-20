@@ -55,3 +55,39 @@
     height: 28px;
   }
 }
+
+@media (max-width: 640px) {
+  .layout-top-bar {
+    padding: 0 12px;
+  }
+
+  .layout-topbar-logo {
+    gap: 6px;
+
+    .logo-img {
+      width: 40px;
+      height: 40px;
+    }
+  }
+
+  .layout-topbar-subtitle,
+  .layout-topbar-menu > img,
+  .layout-topbar-role {
+    display: none;
+  }
+
+  .layout-topbar-menu {
+    gap: 8px;
+
+    > span {
+      max-width: 8rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    button {
+      margin-left: 0;
+    }
+  }
+}

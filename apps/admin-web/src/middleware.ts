@@ -1,27 +1,48 @@
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { ROUTES } from "./routes";
+import { auth } from "@/auth";
 
-export default async function middleware_router_auth(request: NextRequest) {
-  const role: any = process.env.APP_ROLE;
-  const url = request?.nextUrl?.pathname ?? "";
-  const _u0 = url.split("/").filter((p) => p)?.[0] ?? "";
-  const valid = ROUTES.find((route) => {
-    return route.url === `/${_u0}` && route.role.includes(role);
-  });
+/**
+ * Route protection derived from the encrypted session (ADR-0010) — never from a
+ * build-time env role. This is a UX guard: the services independently enforce every
+ * rule below. Hidden UI is not security.
+ */
 
-  if (valid === null || valid === undefined) {
-    return NextResponse.redirect(new URL("/403", request.url));
-  } else {
-    return NextResponse.next();
+// Paths whose *actions* require the ADMIN realm role (execution writes and reference-data
+// mutations, per SECURITY.md). Read-only lists remain available to investors.
+const ADMIN_ONLY_PREFIXES = ["/executions/new", "/reference"];
+const ADMIN_ONLY_SUFFIXES = ["/correct", "/cancel"];
+
+function isAdminOnly(pathname: string): boolean {
+  if (ADMIN_ONLY_PREFIXES.some((p) => pathname.startsWith(p))) {
+    return true;
   }
+  return ADMIN_ONLY_SUFFIXES.some((s) => pathname.endsWith(s));
 }
 
+export default auth((req) => {
+  const { nextUrl } = req;
+  const session = req.auth;
+  const pathname = nextUrl.pathname;
+
+  if (!session || session.error === "RefreshAccessTokenError") {
+    const loginUrl = new URL("/login", nextUrl.origin);
+    // Preserve the intended destination as a relative path only (open-redirect safe).
+    loginUrl.searchParams.set("callbackUrl", pathname + nextUrl.search);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  const isAdmin = session.roles.includes("ADMIN");
+  if (isAdminOnly(pathname) && !isAdmin) {
+    return NextResponse.redirect(new URL("/403", nextUrl.origin));
+  }
+
+  return NextResponse.next();
+});
+
 export const config = {
+  // Guard app pages; exclude API (self-enforcing), Auth.js, Next internals, the login
+  // and 403 pages, and static assets.
   matcher: [
-    "/dashboard/:path*",
-    "/execution/:path*",
-    "/accounts/:path*",
-    "/users/:path*",
+    "/((?!api|_next/static|_next/image|favicon.ico|login|403|.*\\.(?:png|gif|ico|svg|jpg|jpeg|webp)$).*)",
   ],
 };
