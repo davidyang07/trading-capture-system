@@ -39,5 +39,12 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Phase 12: a local JWKS/OIDC stub to exercise both jwtDecoder branches
+             (issuer-location vs jwk-set-uri) without a real Keycloak. -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 </project>

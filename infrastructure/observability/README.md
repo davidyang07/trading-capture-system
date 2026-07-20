@@ -31,9 +31,10 @@ counters gain `_total`). The dashboards use the Prometheus names.
 
 ## Prometheus
 
-`prometheus/prometheus.yml` scrapes all four services every 15s. The services run on the host until
-they are containerized in Phase 13, so the targets are `host.docker.internal:8081-8084`; once they
-join the compose network they become service DNS names on 8080.
+`prometheus/prometheus.yml` scrapes all four services every 15s. For the host-run workflow the
+targets are `host.docker.internal:8081-8084`. In the **Phase 12 full stack**
+(`docker-compose.full.yml`) the services join the compose network, so the override swaps in
+`prometheus/prometheus.full.yml`, which scrapes them by DNS (`trading-service:8081`, …).
 
 ## Grafana
 

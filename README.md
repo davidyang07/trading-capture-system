@@ -102,9 +102,10 @@ resumes from persisted state after a restart.
 | `libs/event-contracts` | Avro event schemas + topic/header catalog and contract tests |
 | `libs/test-support` | Singleton Testcontainers (MySQL, Kafka, Redis) and JWT test fixtures |
 | `apps/admin-web` | Next.js / TypeScript admin operator application |
+| `tests/full-system-tests` | Phase 12 cross-service scenarios (live stack, over REST + Kafka) |
 | `contracts/openapi/` | OpenAPI contract of record per service |
 | `docs/` | Architecture notes, ADRs, the event catalog, and data-ownership design |
-| `infrastructure/`, `scripts/`, `docker-compose.yml` | Local development stack and helper scripts |
+| `infrastructure/`, `scripts/`, `docker-compose*.yml` | Local development + full-stack compose and helper scripts |
 
 ---
 
@@ -170,6 +171,33 @@ corepack pnpm install
 corepack pnpm --filter admin-web dev
 ```
 
+### 5. Run the full stack and the 16 end-to-end scenarios (Phase 12)
+
+The full stack runs the four services containerized alongside the infrastructure, with the
+deterministic seed data applied automatically and a health-wait, from one command:
+
+```powershell
+.\scripts\full-stack-up.ps1 -Build      # infra + 4 services, seeded, waits until healthy
+.\scripts\run-scenarios.ps1             # 16 scenarios: pipeline (REST + Kafka) + UI (Playwright)
+.\scripts\full-stack-down.ps1 -Wipe     # tear down (‑Wipe also drops volumes)
+```
+
+- **Pipeline scenarios** run via the `full-system-tests` module (`FULL_STACK=1`) driving the
+  services over real HTTP + Kafka + Keycloak.
+- **UI scenarios** run via the Playwright `*.full.spec.ts` specs (`E2E_FULL_STACK=1`) against a
+  live admin-web + the containerized services.
+- The 16 scenarios and their proof artifacts are catalogued in `docs/release/system-scenarios.md`.
+
+Keycloak advertises a fixed issuer (`http://localhost:8180`) with dynamic backchannel so the
+browser, the host test harness, and the containers agree on one token issuer; services fetch JWKS
+from the in-network URL via `OIDC_JWK_SET_URI` (ADR-0018). admin-web runs on the host for the UI
+E2E; an opt-in `--profile ui` starts a fully containerized admin-web for a compose-only demo.
+
+**Rollback / recovery.** The stack is disposable: `full-stack-down.ps1 -Wipe` removes containers
+and volumes; `full-stack-up.ps1 -Build` recreates everything from the pinned images + seeds. No
+state lives outside the named volumes. Image build hardening, Kubernetes, and Jenkins delivery are
+Phase 13.
+
 ---
 
 ## API contracts & documentation
@@ -196,9 +224,14 @@ A test pyramid is applied per service:
 - **Contract** — Avro serialization round-trips and schema backward-compatibility.
 - **HTTP clients** — WireMock stubs covering success, timeouts, retryable vs. non-retryable
   failures, and circuit-breaker behavior.
+- **Full-system** — the 16 cross-service scenarios against the live stack (`full-system-tests`
+  JUnit module over REST + Kafka, and Playwright UI specs); see step 5 above.
 
 Run everything with `./mvnw -B -ntp verify`, or a single module with
-`./mvnw -B -ntp -pl services/<name> -am test`.
+`./mvnw -B -ntp -pl services/<name> -am test`. A **JaCoCo coverage gate** (80% line / 70% branch,
+generated code excluded) is enforced on `verify` from Phase 12; the `full-system-tests` module and
+the Playwright full specs self-skip unless the live stack is up (they are never disabled to hide a
+defect).
 
 ---
 
@@ -223,10 +256,10 @@ Actively evolving areas layered on top of the platform above:
 
 - Reliability and observability: frontend/server correlation proof, business metrics, and
   Prometheus/Grafana dashboards (Phase 11).
-- Delivery: per-service container images, Kubernetes manifests, and a CI pipeline.
-- Full-system verification: compose-hosted application services and end-to-end scenario setup
-  (Phases 12–13). The frontend guide distinguishes deterministic UI E2E from the gated
-  live-service data-flow suite.
+- Full-system verification: the four services containerized in compose, seeded demo data, a
+  health-wait, the 16 end-to-end scenarios, and a JaCoCo coverage gate (Phase 12; see step 5).
+- Delivery: final hardened container images + trivy scanning, Kubernetes manifests, and a Jenkins
+  CI pipeline (Phase 13).
 
 ---
 

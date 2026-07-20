@@ -60,18 +60,30 @@ public class SecurityConfig {
     }
 
     /**
-     * Production decoder: JWKS from the issuer, validating signature, expiry, issuer and
-     * audience. Wrapped in a supplier so OIDC discovery happens on first use, not at boot
-     * (the service must start without Keycloak). Tests switch {@code tcs.security.jwt-mode}
-     * to {@code local-keys} and provide a decoder with the same validators over a test key.
+     * Production decoder: JWKS-backed, validating signature, expiry, issuer and audience.
+     * Wrapped in a supplier so JWKS/OIDC discovery happens on first use, not at boot (the
+     * service must start without Keycloak). Tests switch {@code tcs.security.jwt-mode} to
+     * {@code local-keys} and provide a decoder with the same validators over a test key.
+     *
+     * <p>By default the JWKS location is discovered from the issuer. When Keycloak's
+     * browser-facing (frontchannel) URL differs from the URL the service reaches it at
+     * (backchannel) — e.g. the containerized full stack, where tokens carry
+     * {@code iss=http://localhost:8180/...} but the service fetches keys from
+     * {@code http://keycloak:8180/...} — set {@code tcs.security.jwk-set-uri} to the backchannel
+     * JWKS URL. A TCS-owned property (not {@code spring.security.oauth2.resourceserver.jwt.*}) is
+     * used deliberately so Spring Boot's own JWKS auto-configuration never activates a competing
+     * decoder. The {@code iss} claim is still validated against the configured issuer either way.
      */
     @Bean
     @ConditionalOnProperty(name = "tcs.security.jwt-mode", havingValue = "oidc", matchIfMissing = true)
     public JwtDecoder jwtDecoder(
             @Value("${spring.security.oauth2.resourceserver.jwt.issuer-uri}") String issuer,
+            @Value("${tcs.security.jwk-set-uri:}") String jwkSetUri,
             @Value("${tcs.security.audience}") String audience) {
         return new SupplierJwtDecoder(() -> {
-            NimbusJwtDecoder decoder = NimbusJwtDecoder.withIssuerLocation(issuer).build();
+            NimbusJwtDecoder decoder = (jwkSetUri == null || jwkSetUri.isBlank())
+                    ? NimbusJwtDecoder.withIssuerLocation(issuer).build()
+                    : NimbusJwtDecoder.withJwkSetUri(jwkSetUri).build();
             decoder.setJwtValidator(tokenValidator(issuer, audience));
             return decoder;
         });
