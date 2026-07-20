@@ -32,6 +32,12 @@ tcs:
   security:
     # Tokens must carry this audience (attached by the realm's trading-service-aud scope).
     audience: trading-service
+    # Optional backchannel JWKS URL (containerized full stack — Phase 12, ADR-0018): set when
+    # Keycloak's browser-facing issuer differs from the URL this service reaches it at. Blank =
+    # discover JWKS from the issuer. The iss claim is validated against issuer-uri either way.
+    # A TCS-owned key (not spring.security.oauth2.resourceserver.jwt.*) so Boot's own JWKS
+    # auto-config never activates a second decoder.
+    jwk-set-uri: ${OIDC_JWK_SET_URI:}
 
 management:
   endpoints:

@@ -6,9 +6,9 @@ import { defineConfig, devices } from "@playwright/test";
  * Two tiers of specs:
  *  - Authentication/authorization specs (e2e/auth*.spec.ts) need only Keycloak + admin-web.
  *  - Full-stack data specs (e2e/*.full.spec.ts) additionally need the trading/account/
- *    enrichment services running; they self-skip unless E2E_FULL_STACK=1 (the services are
- *    containerized in Phase 13). This gates on infrastructure availability — it never
- *    disables a test to hide a defect.
+ *    enrichment services running; they self-skip unless E2E_FULL_STACK=1. Phase 12 brings the
+ *    services up in compose (scripts/full-stack-up.ps1), so these now run against the real
+ *    stack. This gates on infrastructure availability — it never disables a test to hide a defect.
  */
 const PORT = Number(process.env.E2E_PORT ?? 3000);
 const baseURL = `http://localhost:${PORT}`;

@@ -1,0 +1,40 @@
+# Keep the Docker build context small and deterministic. The service images build from the
+# repository root (the reactor needs the parent POM, .mvn settings, and shared libs), so this
+# excludes build output, dependencies, local-only docs, and secrets from every image layer.
+**/target/
+**/node_modules/
+**/.next/
+**/out/
+**/dist/
+**/build/
+.git/
+.github/
+.pnpm-store/
+# Local-only agent config and internal docs (never in an image).
+.claude/
+docs/
+AGENTS.md
+CLAUDE.md
+CLAUDE.local.md
+# Never bake env files / secrets into a layer.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+# Test/coverage output.
+**/coverage/
+**/playwright-report/
+**/test-results/
+**/blob-report/
+# Playwright E2E specs are not a build input for any image.
+apps/admin-web/e2e/
+# IDE / OS noise.
+.idea/
+.vscode/
+*.iml
+*.log

@@ -15,6 +15,12 @@
     <name>test-support</name>
     <description>Shared test fixtures: Testcontainers singleton base classes and JWT test helpers (populated from Phase 3)</description>
 
+    <properties>
+        <!-- Phase 12: test-only infrastructure (singleton Testcontainers + JWT fixtures), no
+             production code to cover — excluded from the JaCoCo gate (ADR-0018). -->
+        <jacoco.skip>true</jacoco.skip>
+    </properties>
+
     <!-- Consumed by service modules with <scope>test</scope>; the compile-scope
          dependencies below therefore never leak into production classpaths. -->
     <dependencies>
