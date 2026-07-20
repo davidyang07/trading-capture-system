@@ -1,52 +1,39 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { get, map } from "lodash-es";
-import { getRoutes } from "@/routes";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { routesForRole } from "@/routes";
+import { isAdmin } from "@/lib/permissions";
 import "./Nav.scss";
 
 export const Nav = () => {
-  const router = useRouter();
   const pathname = usePathname();
-  const routes = getRoutes();
-  const [currP, setCurrP] = useState<string>(get(routes?.[0], "url", "/"));
+  const { data: session } = useSession();
+  const routes = routesForRole(isAdmin(session ?? null));
 
-  const jump = (e: any, url: string) => {
-    setCurrP(url);
-    router.push(url);
-  };
-
-  const activeClass = (url: string) => {
-    return currP.indexOf(url) !== -1 ? "active" : "";
-  };
-
-  useEffect(() => {
-    if (pathname === "/") {
-      const url = get(routes?.[0], "url", "");
-      url && setCurrP(url);
-      url && router.replace(url);
-    } else {
-      setCurrP(pathname);
-    }
-  }, [pathname]);
+  const isActive = (url: string) =>
+    pathname === url || pathname.startsWith(`${url}/`);
 
   return (
-    <div className="layout-navbar">
-      <div className="layout-nav-list">
-        {map(routes, (item: any) => {
+    <nav className="layout-navbar" aria-label="Primary">
+      <ul className="layout-nav-list">
+        {routes.map((item) => {
+          const active = isActive(item.url);
           return (
-            <div
-              key={item.url}
-              className={`layout-nav-item ${activeClass(item.url)}`}
-              onClick={(e) => jump(e, item.url)}
-            >
-              <i className={item.icon} />
-              <span>{item.name}</span>
-            </div>
+            <li key={item.url}>
+              <Link
+                href={item.url}
+                className={`layout-nav-item ${active ? "active" : ""}`}
+                aria-current={active ? "page" : undefined}
+              >
+                <i className={item.icon} aria-hidden="true" />
+                <span>{item.name}</span>
+              </Link>
+            </li>
           );
         })}
-      </div>
-    </div>
+      </ul>
+    </nav>
   );
 };
