@@ -11,26 +11,44 @@ interface IPaginator {
   pageNumber: number;
 }
 
-interface ITableProps {
-  dataList: any;
+interface ITableProps<T extends object> {
+  dataList: T[];
   totalNum: number;
   empty?: string | React.ReactNode;
   sizeOptions?: number[] | undefined;
   onPageChange: (params: IPaginator) => void;
-  [T: string | number]: any;
+  /**
+   * Current zero-based page owned by the parent. When provided, the paginator
+   * stays in sync with parent-driven page resets (e.g. a filter change that
+   * resets `page` to 0), preventing the highlighted page from drifting away
+   * from the data actually shown.
+   */
+  page?: number;
+  children?: React.ReactNode;
+  "aria-label"?: string;
 }
 
-const Table: React.FC<ITableProps> = ({
+function Table<T extends object>({
   dataList = [],
   totalNum = 0,
   children,
+  empty,
+  "aria-label": ariaLabel,
   sizeOptions = DEFAULT_PAGE_OPTIONS,
   onPageChange,
-  ...props
-}) => {
+  page,
+}: ITableProps<T>) {
   const [firstIndex, setFirstIndex] = useState(0);
   const [pageSize, setPageSize] = useState(sizeOptions[0]);
-  const handlePageChange = ({ first, rows, page, totalPages }: any) => {
+
+  // Keep the paginator aligned with a parent-controlled page (e.g. reset to 0
+  // on a filter change). Only runs when the caller drives `page` explicitly.
+  useEffect(() => {
+    if (page !== undefined) {
+      setFirstIndex(page * pageSize);
+    }
+  }, [page, pageSize]);
+  const handlePageChange = ({ first, rows }: { first: number; rows: number }) => {
     const pageNumber = Math.ceil((first + 1) / rows);
     setFirstIndex(first);
     setPageSize(rows);
@@ -46,31 +64,33 @@ const Table: React.FC<ITableProps> = ({
   return (
     <div className="table-container">
       <DataTable
-        {...props}
         value={dataList}
-        selectionMode="single"
+        aria-label={ariaLabel}
+        pt={{ table: { "aria-label": ariaLabel } }}
         emptyMessage={() => (
           <div className="table-empty-box">
             <i className="pi pi-exclamation-circle"></i>
-            {props.empty ? props.empty : <p>No available options</p>}
+            {empty ?? <p>No available options</p>}
           </div>
         )}
       >
         {children}
       </DataTable>
-      {totalNum > 0 && dataList?.length >= 0 ? (
+      {totalNum > pageSize ? (
         <div className="table-paginator-container">
           <Paginator
             first={firstIndex}
             rows={pageSize}
-            totalRecords={totalNum }
+            totalRecords={totalNum}
             rowsPerPageOptions={sizeOptions}
-            onPageChange={handlePageChange}
+            onPageChange={({ first, rows }) =>
+              handlePageChange({ first, rows })
+            }
           />
         </div>
       ) : null}
     </div>
   );
-};
+}
 
 export default Table;

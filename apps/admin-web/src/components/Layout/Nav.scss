@@ -30,3 +30,31 @@
     border-radius: 15px;
   }
 }
+
+@media (max-width: 900px) {
+  .layout-navbar {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .layout-nav-list {
+    width: max-content;
+    min-width: 100%;
+    flex-direction: row;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .layout-nav-item {
+    width: auto;
+    height: 44px;
+    padding: 0 14px;
+    white-space: nowrap;
+
+    &:hover,
+    &.active {
+      width: auto;
+      border-radius: 10px;
+    }
+  }
+}
