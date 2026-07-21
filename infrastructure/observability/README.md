@@ -1,7 +1,7 @@
-# Observability (Phase 11)
+# Observability
 
-Structured JSON logging + correlation IDs live in `libs/observability-support` (Phase 2+). Phase 11
-adds the metrics stack: Micrometer → Prometheus → Grafana, per ADR-0015. No distributed tracing —
+Structured JSON logging + correlation IDs live in `libs/observability-support`. The metrics stack
+is Micrometer → Prometheus → Grafana. No distributed tracing —
 correlation IDs answer "what happened to this request" across the demo.
 
 ## What each service exposes
@@ -11,20 +11,21 @@ through `observability-support` and exposes:
 
 - `/actuator/health`, `/actuator/health/{liveness,readiness}`, `/actuator/info` — probes.
 - `/actuator/prometheus` — the scrape endpoint (a documented public metrics path; it exposes only
-  meters, never business data — `env`/`beans`/etc. stay locked behind the JWT). In production this
-  would be network-restricted (Phase 13 K8s NetworkPolicy) or on a separate management port.
+  meters, never business data — `env`/`beans`/etc. stay locked behind the JWT). The Kubernetes
+  manifests restrict it to in-namespace traffic; other deployments should provide an equivalent
+  network boundary or a separate management port.
 
 Every meter carries a common `application=<spring.application.name>` tag (set in
 `ObservabilitySupportAutoConfiguration`) so Prometheus/Grafana can slice by service.
 
-### Business metrics (already registered in earlier phases, scraped from Phase 11)
+### Business metrics
 
 - trading-service: `tcs.trading.orders.{created,updated,deleted}`,
   `tcs.trading.executions.recorded{execType}`, `tcs.trading.allocation_state.applied{action}`.
 - account-service: `AccountMetrics` counters.
 - enrichment-service: `tcs.enrichment.cache.{hit,miss,error,eviction}`, reference mutations.
 - allocation-engine: `tcs.allocation.ingest.*` (consumed/accepted/rejected/dead_lettered/…),
-  `tcs.allocation.outbox.backlog` **gauge** (unpublished outbox rows — new in Phase 11).
+  `tcs.allocation.outbox.backlog` **gauge** (unpublished outbox rows).
 
 Prometheus renames dotted meters (`tcs.allocation.outbox.backlog` → `tcs_allocation_outbox_backlog`;
 counters gain `_total`). The dashboards use the Prometheus names.
@@ -32,7 +33,7 @@ counters gain `_total`). The dashboards use the Prometheus names.
 ## Prometheus
 
 `prometheus/prometheus.yml` scrapes all four services every 15s. For the host-run workflow the
-targets are `host.docker.internal:8081-8084`. In the **Phase 12 full stack**
+targets are `host.docker.internal:8081-8084`. In the **containerized full stack**
 (`docker-compose.full.yml`) the services join the compose network, so the override swaps in
 `prometheus/prometheus.full.yml`, which scrapes them by DNS (`trading-service:8081`, …).
 

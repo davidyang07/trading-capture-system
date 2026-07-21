@@ -2,7 +2,7 @@
 
 Owns financial accounts, immutable cash/security ledgers, and ledger-derived balances
 (`tcs_account` schema, port 8082). See `contracts/openapi/account-service.openapi.yaml` for
-the API contract of record and `docs/adr/ADR-0002` for the service-boundary decision.
+the API contract of record; the service-boundary and ledger rules are summarized below.
 
 ## Domain rules
 
@@ -90,10 +90,10 @@ test tokens validated by the production issuer+audience validator chain.
 
 ## Deferred integrations (documented boundaries)
 
-- No account domain events yet — the transactional outbox and event contracts arrive with
-  Phases 6–8 (ADR-0005).
-- `/actuator/prometheus` exposure and dashboards arrive in Phase 11 (ADR-0015); domain counters
-  (`tcs.account.accounts.*`, `tcs.account.cash.*`, `tcs.account.security.*`,
-  `tcs.account.idempotent.replays`) are registered now.
+- Account domain events are not currently published; account state is exposed through the REST
+  contract and remains authoritative in its owned schema.
+- `/actuator/prometheus` exposes the registered domain counters (`tcs.account.accounts.*`,
+  `tcs.account.cash.*`, `tcs.account.security.*`, `tcs.account.idempotent.replays`) for Prometheus
+  and the provisioned Grafana dashboards.
 - The `account-service-aud` realm client scope is import-validated only until the dev Keycloak
-  volume is re-imported (see repo `docs/status/known-gaps.md`).
+  volume is re-imported; wipe/recreate the local Keycloak volume after realm-definition changes.

@@ -1,0 +1,140 @@
+# allocation-engine — ConfigMap + Deployment + Service. Kafka-driven (no inbound business HTTP);
+# serves actuator on 8084 for probes/metrics. Its transactional-outbox poller is single-instance
+# by design (no FOR UPDATE SKIP LOCKED on the poll), so this Deployment pins replicas: 1 with the
+# Recreate strategy — never run two pollers concurrently.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tcs-allocation-config
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: allocation-engine
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: trading-capture-system
+data:
+  SPRING_PROFILES_ACTIVE: "json-logs"
+  SERVICE_NAME: "allocation-engine"
+  ALLOCATION_DB_HOST: "mysql"
+  ALLOCATION_DB_PORT: "3306"
+  ALLOCATION_CLIENT_ID: "allocation-engine"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: allocation-engine
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: allocation-engine
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  # Single replica: the outbox poller must not run concurrently (see header + known-gaps).
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: allocation-engine
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: allocation-engine
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: trading-capture-system
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8084"
+    spec:
+      serviceAccountName: tcs-app
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: allocation-engine
+          image: tcs/allocation-engine:0.13.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8084
+          envFrom:
+            - configMapRef:
+                name: tcs-common-config
+            - configMapRef:
+                name: tcs-allocation-config
+          env:
+            - name: ALLOCATION_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: tcs-secrets
+                  key: ALLOCATION_DB_USER
+            - name: ALLOCATION_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tcs-secrets
+                  key: ALLOCATION_DB_PASSWORD
+            - name: ALLOCATION_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tcs-secrets
+                  key: ALLOCATION_ENGINE_CLIENT_SECRET
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: allocation-engine
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: allocation-engine
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: allocation-engine
+  ports:
+    - name: http
+      port: 8084
+      targetPort: http

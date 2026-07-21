@@ -8,9 +8,10 @@ export const metadata = { title: "Sign in · Trading Capture System" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: { callbackUrl?: string; error?: string };
+  searchParams: Promise<{ callbackUrl?: string; error?: string }>;
 }) {
-  const callbackUrl = sanitizeRelativePath(searchParams.callbackUrl);
+  const resolvedSearchParams = await searchParams;
+  const callbackUrl = sanitizeRelativePath(resolvedSearchParams.callbackUrl);
 
   // Already authenticated with a healthy session — go straight in.
   const session = await auth();
@@ -23,7 +24,7 @@ export default async function LoginPage({
     await signIn("keycloak", { redirectTo: callbackUrl });
   }
 
-  const expired = searchParams.error || session?.error;
+  const expired = resolvedSearchParams.error || session?.error;
 
   return (
     <main className="login-page">

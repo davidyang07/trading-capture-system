@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Form } from "react-final-form";
 import { Button } from "primereact/button";
 import { PageHeader } from "@/components/PageHeader";
@@ -19,11 +19,8 @@ interface CorrectValues {
   text?: string;
 }
 
-export default function CorrectExecutionPage({
-  params,
-}: {
-  params: { internalId: string };
-}) {
+export default function CorrectExecutionPage() {
+  const params = useParams<{ internalId: string }>();
   const internalId = decodeURIComponent(params.internalId);
   const router = useRouter();
   const toast = useToast();

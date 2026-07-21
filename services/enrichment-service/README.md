@@ -3,7 +3,7 @@
 Read-mostly reference data: instruments and alternate identifiers, exchanges, currencies,
 settlement options, and fee rules (`tcs_enrichment` schema, port 8083), with Redis-backed
 read-through caching. See `contracts/openapi/enrichment-service.openapi.yaml` for the API
-contract of record and `docs/adr/ADR-0003` for the read-mostly + Redis decision.
+contract of record; the read-mostly and Redis-fallback rules are summarized below.
 
 ## Domain rules
 
@@ -84,8 +84,10 @@ and RS256 test tokens validated by the production issuer+audience validator chai
 
 ## Deferred integrations (documented boundaries)
 
-- No enrichment domain events yet — event contracts arrive with Phases 6–8.
-- `/actuator/prometheus` exposure and dashboards arrive in Phase 11 (ADR-0015); domain/cache
-  counters (`tcs.enrichment.cache.*`, `tcs.enrichment.reference.mutations`) are registered now.
+- Enrichment domain events are not currently published; reference data is exposed through its REST
+  contract and remains authoritative in its owned schema.
+- `/actuator/prometheus` exposes the registered domain/cache counters
+  (`tcs.enrichment.cache.*`, `tcs.enrichment.reference.mutations`) for Prometheus and the
+  provisioned Grafana dashboards.
 - The `enrichment-service-aud` realm client scope is import-validated only until the dev Keycloak
-  volume is re-imported (see repo `docs/status/known-gaps.md`).
+  volume is re-imported; wipe/recreate the local Keycloak volume after realm-definition changes.

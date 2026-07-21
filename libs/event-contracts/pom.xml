@@ -13,7 +13,7 @@
 
     <artifactId>event-contracts</artifactId>
     <name>event-contracts</name>
-    <description>Versioned Avro event schemas and generated classes (docs/contracts/event-catalog.md is the catalog of record)</description>
+    <description>Versioned Avro event schemas, topic conventions, and generated classes</description>
 
     <properties>
         <!-- Phase 12: the only main classes here are generated Avro (excluded from coverage) plus

@@ -1,0 +1,20 @@
+# Trivy configuration for TCS image scanning.
+#
+# The CI stage (infrastructure/jenkins/Jenkinsfile) also passes --severity, --exit-code, and
+# --ignore-unfixed explicitly; those CLI flags take precedence over this file. This config sets
+# the scanners and the ignore file so ad-hoc local scans behave the same as CI:
+#   docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+#     -v "$PWD/infrastructure/trivy":/cfg:ro \
+#     aquasec/trivy:0.72.0 image --config /cfg/trivy.yaml tcs/trading-service:local
+scan:
+  scanners:
+    - vuln
+    - secret
+severity:
+  - HIGH
+  - CRITICAL
+exit-code: 1
+# Fail only on vulnerabilities that have an upstream fix available (unfixed OS CVEs are noise the
+# image cannot remediate). Documented, time-boxed exceptions go in .trivyignore.
+ignore-unfixed: true
+ignorefile: /cfg/.trivyignore

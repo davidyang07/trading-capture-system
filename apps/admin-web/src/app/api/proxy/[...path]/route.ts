@@ -61,9 +61,9 @@ async function readAccessToken(req: NextRequest): Promise<{
 
 async function handle(
   req: NextRequest,
-  ctx: { params: { path?: string[] } }
+  ctx: { params: Promise<{ path?: string[] }> }
 ): Promise<NextResponse> {
-  const segments = ctx.params.path ?? [];
+  const segments = (await ctx.params).path ?? [];
   const [service, ...rest] = segments;
 
   if (!service || !isServiceKey(service)) {

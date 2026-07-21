@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { Button } from "primereact/button";
 import { Column } from "primereact/column";
 import { ConfirmDialog, confirmDialog } from "primereact/confirmdialog";
@@ -33,11 +33,8 @@ function DetailRow({ label, value }: { label: string; value: React.ReactNode }) 
   );
 }
 
-export default function OrderDetailPage({
-  params,
-}: {
-  params: { orderId: string };
-}) {
+export default function OrderDetailPage() {
+  const params = useParams<{ orderId: string }>();
   const orderId = decodeURIComponent(params.orderId);
   const router = useRouter();
   const toast = useToast();

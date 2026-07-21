@@ -1,0 +1,141 @@
+# admin-web — ConfigMap + Deployment + Service. Next.js standalone BFF (Auth.js); the only
+# browser-facing tier, exposed through the Ingress. Tokens live in the encrypted httpOnly
+# session; the BFF proxies to the in-namespace services.
+#
+# AUTH_URL / NEXT_PUBLIC_APP_URL must be the browser-facing Ingress URL. AUTH_KEYCLOAK_ISSUER is
+# the OIDC discovery URL; with the ADR-0018 frontchannel/backchannel split it points at the
+# in-cluster Keycloak while the browser is redirected to the frontchannel host. Adjust the host
+# values to the real Ingress/Keycloak hostnames at deploy time.
+#
+# PRODUCTION TLS: the image runs NODE_ENV=production, so Auth.js issues secure session cookies over
+# HTTPS. Before any non-localhost use, set AUTH_URL / NEXT_PUBLIC_APP_URL to https://… and add a
+# `tls:` block (+ cert-manager) to 50-ingress.yaml. The http://tcs.local values below are for a
+# local demo only.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tcs-admin-config
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: admin-web
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: trading-capture-system
+data:
+  AUTH_URL: "http://tcs.local"
+  AUTH_TRUST_HOST: "true"
+  AUTH_KEYCLOAK_ID: "admin-web"
+  AUTH_KEYCLOAK_ISSUER: "http://keycloak:8180/realms/tcs"
+  NEXT_PUBLIC_APP_URL: "http://tcs.local"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admin-web
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: admin-web
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: admin-web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: admin-web
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/part-of: trading-capture-system
+    spec:
+      serviceAccountName: tcs-app
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: admin-web
+          image: tcs/admin-web:0.13.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: tcs-common-config
+            - configMapRef:
+                name: tcs-admin-config
+          env:
+            - name: AUTH_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: tcs-secrets
+                  key: AUTH_SECRET
+          startupProbe:
+            httpGet:
+              path: /api/auth/session
+              port: http
+            periodSeconds: 5
+            failureThreshold: 20
+          readinessProbe:
+            httpGet:
+              path: /api/auth/session
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /api/auth/session
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: next-cache
+              mountPath: /app/apps/admin-web/.next/cache
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        - name: next-cache
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admin-web
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: admin-web
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: admin-web
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
+import Link from "next/link";
 import { Button } from "primereact/button";
 import type { ApiError } from "@/lib/api-error";
 
@@ -82,9 +83,9 @@ export function ErrorState({
         </ul>
       ) : null}
       {error.kind === "unauthenticated" ? (
-        <a href="/login?error=SessionExpired" className="p-button p-button-sm">
+        <Link href="/login?error=SessionExpired" className="p-button p-button-sm">
           Sign in again
-        </a>
+        </Link>
       ) : null}
       {onRetry &&
       error.kind !== "unauthenticated" &&

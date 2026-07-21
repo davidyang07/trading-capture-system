@@ -1,6 +1,7 @@
 # event-contracts
 
-Owns every Avro event schema in the system (ADR-0004). `docs/contracts/event-catalog.md` is the catalog of record; this module is its enforceable form. No event DTO may be defined anywhere else (`.claude/rules/events.md`).
+Owns every Avro event schema in the system and is the enforceable event-contract catalog. Event
+DTOs are generated from these schemas rather than redefined in individual services.
 
 ## Contents
 
@@ -17,14 +18,16 @@ Owns every Avro event schema in the system (ADR-0004). `docs/contracts/event-cat
 
 Compatibility is **BACKWARD** per subject (TopicNameStrategy → subject `<topic>-value`). Evolution = additive optional fields with `null` defaults; anything else is a breaking change and requires a new `v<major+1>` topic with a parallel-publication window. `SchemaCompatibilityTest` demonstrates both directions; the compose Schema Registry enforces the same rule at runtime.
 
-## Sync check (documented gate)
+## Sync check
 
-At every phase gate that touches events, the following must agree — `TopicConventionsTest` enforces (1)–(3) mechanically, (4) is a review step:
+Whenever events change, the following must agree; `TopicConventionsTest` enforces the mechanical
+relationships:
 
 1. Seven outbound topics in `EventTopics` ↔ seven event schemas, names matched kebab-case.
 2. Topic naming convention `tcs.<domain>.<event>.v<major>`.
 3. Every event schema's `doc` names its topic; headers mirror the envelope constants.
-4. `docs/contracts/event-catalog.md` tables list the same topics, keys, and payload cores as the `.avsc` files.
+4. This README and the service documentation describe the same topic keys and payload purpose as
+   the `.avsc` files.
 
 ## Tests
 

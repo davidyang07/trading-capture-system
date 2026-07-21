@@ -1,0 +1,39 @@
+# Shared, NON-SECRET configuration for all app pods (backing-store endpoints + OIDC URIs).
+# Per-service ConfigMaps (in each service manifest) carry service-specific values; secrets live
+# only in the externally provisioned `tcs-secrets` Secret and are referenced by key — never
+# inlined here. `examples/secret.example.yaml` documents the required keys with placeholders.
+#
+# Backing stores (mysql, redis, kafka, schema-registry, keycloak) are assumed provided in the
+# namespace (operator/StatefulSet or ExternalName Service to a managed instance) — deploying
+# them is out of the application-tier scope; wire their Service DNS names here.
+#
+# OIDC issuer note (ADR-0018 frontchannel/backchannel split): OIDC_ISSUER must equal the issuer
+# stamped into tokens (the browser-facing Keycloak URL). When Keycloak is exposed via Ingress,
+# override OIDC_ISSUER to that external URL while OIDC_JWK_SET_URI / OIDC_TOKEN_URI stay on the
+# in-cluster Service DNS. The in-cluster defaults below are correct for service-to-service and M2M;
+# BROWSER LOGIN additionally requires an Ingress-exposed Keycloak (KC_HOSTNAME = frontchannel host)
+# with OIDC_ISSUER / AUTH_KEYCLOAK_ISSUER overridden to it — see the kubernetes README.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tcs-common-config
+  namespace: tcs
+  labels:
+    app.kubernetes.io/part-of: trading-capture-system
+data:
+  # OIDC / Keycloak
+  OIDC_ISSUER: "http://keycloak:8180/realms/tcs"
+  OIDC_JWK_SET_URI: "http://keycloak:8180/realms/tcs/protocol/openid-connect/certs"
+  OIDC_TOKEN_URI: "http://keycloak:8180/realms/tcs/protocol/openid-connect/token"
+  # Backing stores (in-namespace Service DNS). The per-service ConfigMaps map the MySQL host/port
+  # onto each service's prefixed env names (TRADING_DB_HOST, ACCOUNT_DB_HOST, ...); Redis / Kafka /
+  # Schema-Registry env names are shared verbatim, so they live here.
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:9092"
+  SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+  # In-namespace service URLs (used by allocation-engine M2M + admin-web BFF)
+  TRADING_SERVICE_URL: "http://trading-service:8081"
+  ACCOUNT_SERVICE_URL: "http://account-service:8082"
+  ENRICHMENT_SERVICE_URL: "http://enrichment-service:8083"
+  ALLOCATION_ENGINE_URL: "http://allocation-engine:8084"

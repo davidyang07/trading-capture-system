@@ -1,6 +1,10 @@
 # allocation-engine
 
-Kafka-driven ingestion of FIX 4.4 AllocationInstruction (35=J) messages (Phase 7 scope). Owns the `tcs_allocation` schema. Port 8084. **No business REST endpoints yet** — the service consumes, validates, persists, and publishes events; Phase 8 adds the allocation orchestration (M2M validation, smart selection, state transitions beyond RECEIVED/INVALID, recovery).
+Kafka-driven ingestion and orchestration of FIX 4.4 AllocationInstruction (35=J) messages. Owns
+the `tcs_allocation` schema and serves actuator endpoints on port 8084. It intentionally exposes no
+inbound business REST API: the service consumes, validates, persists, selects executions through
+authenticated M2M dependencies, drives a recoverable state machine, and publishes Avro events from
+a transactional outbox.
 
 ## Pipeline
 
@@ -14,13 +18,17 @@ tcs.fix.allocation-instruction.v1 (raw FIX string)
   → poller publishes Avro events (acks=all, idempotent producer)
 ```
 
-Outcome events (see `docs/contracts/event-catalog.md`): `AllocationReceived` (accepted), `AllocationRejected` + `ExceptionReported` (field-invalid), `ExceptionReported` (parse failures, retry exhaustion). Business duplicates emit nothing.
+Outcome events (schemas in `libs/event-contracts`): `AllocationReceived` (accepted),
+`AllocationRejected` + `ExceptionReported` (field-invalid), `ExceptionReported` (parse failures,
+retry exhaustion). Business duplicates emit nothing.
 
 ## Idempotency (ADR-0007)
 
 - `uq_raw_messages_coordinates (topic, kafka_partition, kafka_offset)` absorbs broker redelivery; retry/DLT hops map back to the original coordinates via spring-kafka's `kafka_original-*` headers, so one inbound message is always one row with a `delivery_count` trail.
 - `uq_allocations_business_key (alloc_id, alloc_trans_type)` absorbs upstream resends: recognized, marked `DUPLICATE`, acknowledged, no second event set.
-- Offsets commit only after the durable work of an attempt completes (`ack-mode: record`, listener returns = attempt done). The Redis dedup pre-filter arrives with Phase 8.
+- Offsets commit only after the durable work of an attempt completes (`ack-mode: record`, listener
+  returns = attempt done). A fail-open Redis pre-filter accelerates duplicate detection while
+  database constraints remain authoritative.
 
 ## Failure classification
 
@@ -36,7 +44,13 @@ Retries are non-blocking `@RetryableTopic`: 4 attempts, exponential 1 s → 4 s 
 
 ## Persistence (`V1__allocation_schema.sql`)
 
-`raw_messages` (verbatim payload, processing state, failure category/summary, correlation) · `allocations` (business key, ADR-0006 state column — full state list in the CHECK, Phase 7 writes RECEIVED/INVALID) · `allocation_orders` / `allocation_executions` / `allocation_accounts` (+ nested `allocation_misc_fees`) in wire order · `validation_errors` + `validation_error_fields` (collect-all output) · `outbox_event`. `BigDecimal` DECIMAL(19,4)/(19,8), UTC DATETIME(6), enums as explicit string codes; no seeds (data arrives via Kafka).
+`raw_messages` (verbatim payload, processing state, failure category/summary, correlation) ·
+`allocations` (business key and complete persisted state machine) · `allocation_orders` /
+`allocation_executions` / `allocation_accounts` (+ nested `allocation_misc_fees`) in wire order ·
+`validation_errors` + `validation_error_fields` (collect-all output) · `outbox_event`. Ingestion
+writes `RECEIVED`/`INVALID`; orchestration drives the remaining legal states. `BigDecimal`
+DECIMAL(19,4)/(19,8), UTC DATETIME(6), enums as explicit string codes; no seeds (data arrives via
+Kafka).
 
 ## Validation stages
 
@@ -46,20 +60,21 @@ Retries are non-blocking `@RetryableTopic`: 4 attempts, exponential 1 s → 4 s 
 4. Field validation: dictionary-required presence, formats (decimal scale caps 4/8, dates, timestamps), value domains (AllocTransType 0/1/2, Side 1/2), group-required fields — **all errors collected** (ADR-0012).
 5. Intra-message consistency: Replace/Cancel ⇒ RefAllocID; Σ AllocQty = Quantity.
 
-Cross-service (logical) validation is Phase 8.
+Cross-service logical validation follows field validation during orchestration.
 
-## Phase 8 orchestration
+## Allocation orchestration
 
-Phase 7 stops at ingestion — instructions reach `RECEIVED` (or `INVALID`). Phase 8 takes over from
-`RECEIVED`: it validates the instruction against the other services, selects backing executions,
+Ingestion leaves accepted instructions at `RECEIVED` (or rejects them as `INVALID`). Orchestration
+takes over from `RECEIVED`: it validates the instruction against the other services, selects backing executions,
 binds/releases them in trading-service, and drives the allocation through the ADR-0006 state machine
 to a terminal state, emitting domain events through the transactional outbox. A single scheduled
 driver does this for both new work and crash recovery. Live Keycloak M2M token acquisition (the
-`allocation-engine` client-credentials client + service-account scopes) is verified in Phase 9 via
-`SECURITY.md` and the live-Keycloak suites; the allocation UI remains
-Phase 10; Redis is an optimization only — the database is authoritative.
+`allocation-engine` client-credentials client + service-account scopes) is verified by
+`SECURITY.md` and the live-Keycloak suites. Redis is an optimization only — the database is
+authoritative. The admin UI has no allocation query view because this service intentionally
+exposes no public query API.
 
-### State machine (ADR-0006; diagram in `docs/architecture/event-flows.md`)
+### Persisted state machine
 
 Eight persisted states: `RECEIVED INVALID VALIDATED REJECTED EXECUTIONS_ALLOCATED
 EXECUTIONS_RELEASED COMPLETED FAILED` (terminals: `INVALID REJECTED COMPLETED FAILED`).
@@ -171,7 +186,7 @@ leased rows; an expired lease is reclaimed. Retryable failures schedule an expon
 attempts escalate to `FAILED`. Metrics `tcs.allocation.orchestration.{steps,driver}` and
 `tcs.allocation.dedup` are all low-cardinality (no allocation/account/execution/correlation ids as tags).
 
-### Phase 8 outbox events (ADR-0005)
+### Orchestration outbox events (ADR-0005)
 
 `AllocationValidated`, `ExecutionsAllocated`, `ExecutionsReleased`, `SettlementRequested` — recorded in
 the same transaction as the state change (hard-guarded), Kafka key = business `allocId` (deterministic
@@ -188,9 +203,9 @@ Env overrides (defaults in `application.yml`): `ALLOCATION_DB_HOST/PORT/NAME/USE
 
 Security: OAuth2 resource server via `libs/security-support` (issuer + audience `allocation-engine`); only actuator health/info is public. Metrics: `tcs.allocation.ingest.*` (consumed, accepted, rejected, parse_failed, unsupported_type, duplicate_delivery, duplicate_business, retried_delivery, dead_lettered, outbox_published, outbox_publish_failed). Correlation: `x-correlation-id` Kafka header → MDC → outbox → event metadata + headers.
 
-Phase 8 M2M clients: `tcs.clients.{account,enrichment,trading}.{base-url,connect-timeout,read-timeout}` (env `ACCOUNT_SERVICE_URL`/`ENRICHMENT_SERVICE_URL`/`TRADING_SERVICE_URL`), `resilience4j.retry|circuitbreaker.instances.{account,enrichment,trading}`, and a machine OAuth2 client registration `allocation-engine` (client-credentials; scopes `allocation:process,account:validate,enrichment:read`; secret from env — `ALLOCATION_CLIENT_SECRET`, dev placeholder only; live token flow lands in Phase 9). Dependency metrics: `tcs.allocation.dep.calls{dependency,operation,outcome}`. Access tokens / Authorization headers are never logged.
+M2M clients: `tcs.clients.{account,enrichment,trading}.{base-url,connect-timeout,read-timeout}` (env `ACCOUNT_SERVICE_URL`/`ENRICHMENT_SERVICE_URL`/`TRADING_SERVICE_URL`), `resilience4j.retry|circuitbreaker.instances.{account,enrichment,trading}`, and a machine OAuth2 client registration `allocation-engine` (client-credentials; scopes `allocation:process,account:validate,enrichment:read`; secret from env — `ALLOCATION_CLIENT_SECRET`, dev placeholder only; live token flow is covered by the Keycloak integration suites). Dependency metrics: `tcs.allocation.dep.calls{dependency,operation,outcome}`. Access tokens / Authorization headers are never logged.
 
-Phase 8 orchestration/recovery driver: `tcs.orchestration.*` — `enabled` (default true; env `ORCHESTRATION_ENABLED`; tests disable it and drive `OrchestrationDriver.runOnce()` directly), `poll-interval` (1s), `batch-size` (20), `claim-lease` (2m), `retry-backoff-base`/`-multiplier`/`-max` (5s / 2.0 / 10m), `max-steps-per-run` (6), `dedup-ttl` (30m). Redis: `spring.data.redis.host`/`port` (env `REDIS_HOST`/`REDIS_PORT`); `management.health.redis.enabled=false` so a Redis outage never fails readiness. Orchestration metrics: `tcs.allocation.orchestration.steps{step,outcome}`, `tcs.allocation.orchestration.driver{event}`, `tcs.allocation.dedup{result}` — all low-cardinality.
+Orchestration/recovery driver: `tcs.orchestration.*` — `enabled` (default true; env `ORCHESTRATION_ENABLED`; tests disable it and drive `OrchestrationDriver.runOnce()` directly), `poll-interval` (1s), `batch-size` (20), `claim-lease` (2m), `retry-backoff-base`/`-multiplier`/`-max` (5s / 2.0 / 10m), `max-steps-per-run` (6), `dedup-ttl` (30m). Redis: `spring.data.redis.host`/`port` (env `REDIS_HOST`/`REDIS_PORT`); `management.health.redis.enabled=false` so a Redis outage never fails readiness. Orchestration metrics: `tcs.allocation.orchestration.steps{step,outcome}`, `tcs.allocation.orchestration.driver{event}`, `tcs.allocation.dedup{result}` — all low-cardinality.
 
 ## Testing
 

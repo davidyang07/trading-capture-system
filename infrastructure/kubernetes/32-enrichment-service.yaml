@@ -1,0 +1,134 @@
+# enrichment-service — ConfigMap + Deployment + Service. Stateless REST API (reference data)
+# with a Redis read-through cache; horizontally scalable.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: tcs-enrichment-config
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: enrichment-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: trading-capture-system
+data:
+  SPRING_PROFILES_ACTIVE: "json-logs"
+  SERVICE_NAME: "enrichment-service"
+  ENRICHMENT_DB_HOST: "mysql"
+  ENRICHMENT_DB_PORT: "3306"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: enrichment-service
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: enrichment-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: enrichment-service
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: enrichment-service
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/part-of: trading-capture-system
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8083"
+    spec:
+      serviceAccountName: tcs-app
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: enrichment-service
+          image: tcs/enrichment-service:0.13.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8083
+          envFrom:
+            - configMapRef:
+                name: tcs-common-config
+            - configMapRef:
+                name: tcs-enrichment-config
+          env:
+            - name: ENRICHMENT_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: tcs-secrets
+                  key: ENRICHMENT_DB_USER
+            - name: ENRICHMENT_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: tcs-secrets
+                  key: ENRICHMENT_DB_PASSWORD
+          startupProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: enrichment-service
+  namespace: tcs
+  labels:
+    app.kubernetes.io/name: enrichment-service
+    app.kubernetes.io/component: backend
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: enrichment-service
+  ports:
+    - name: http
+      port: 8083
+      targetPort: http

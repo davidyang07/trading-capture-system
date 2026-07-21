@@ -1,0 +1,80 @@
+# Trading Capture System — namespace, shared ServiceAccount, and default-deny network posture.
+# Validate with:
+#   kubeconform -strict -summary infrastructure/kubernetes/*.yaml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tcs
+  labels:
+    # Labelled so NetworkPolicy namespaceSelectors can target this namespace.
+    name: tcs
+    app.kubernetes.io/part-of: trading-capture-system
+---
+# Shared ServiceAccount for all app pods. The applications never call the Kubernetes API, so the
+# token is NOT auto-mounted (reduces blast radius if a pod is compromised).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tcs-app
+  namespace: tcs
+  labels:
+    app.kubernetes.io/part-of: trading-capture-system
+automountServiceAccountToken: false
+---
+# Default-deny all ingress in the namespace; specific allows are granted below. Closes the
+# The unauthenticated /actuator/prometheus path is not reachable from outside the namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: tcs
+  labels:
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# Allow pods within the tcs namespace to reach each other (service-to-service HTTP, the
+# allocation-engine M2M calls, and the in-namespace Prometheus scrape of /actuator/prometheus).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+  namespace: tcs
+  labels:
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: tcs
+---
+# admin-web is the public entrypoint: allow ingress-controller traffic to it on 3000. Scope the
+# source to namespaces labelled for ingress (e.g. the ingress-nginx namespace carries
+# kubernetes.io/metadata.name=ingress-nginx). The backend services stay namespace-internal.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-admin-web-from-ingress
+  namespace: tcs
+  labels:
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: admin-web
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 3000

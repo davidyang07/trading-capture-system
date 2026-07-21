@@ -2,7 +2,7 @@
 
 Owns orders, executions, and the append-only correction/cancellation audit chains
 (`tcs_trading` schema, port 8081). See `contracts/openapi/trading-service.openapi.yaml`
-for the API contract of record and `docs/adr/ADR-0016` for the Phase 3 domain decisions.
+for the API contract of record; the domain and ownership rules are summarized below.
 
 ## Domain rules
 
@@ -108,8 +108,8 @@ RS256 test tokens validated by the production issuer+audience validator chain.
 - `InstrumentReferencePort` / `AccountReferencePort` are implemented by local
   format-validation adapters; remote validation against enrichment-service (Phase 5) and
   account-service (Phase 4) replaces them behind the same ports.
-- Domain events (order/execution lifecycle) publish nothing yet — the transactional outbox
-  and event contracts arrive with Phases 6–8 (ADR-0005).
-- `/actuator/prometheus` exposure and dashboards arrive in Phase 11 (ADR-0015); domain
-  counters (`tcs.trading.orders.*`, `tcs.trading.executions.recorded`,
-  `tcs.trading.allocation_state.applied`) are registered now.
+- Order/execution lifecycle domain events are not currently published; Kafka event publication is
+  owned by the allocation engine's transactional outbox.
+- `/actuator/prometheus` exposes the registered domain counters (`tcs.trading.orders.*`,
+  `tcs.trading.executions.recorded`, `tcs.trading.allocation_state.applied`), and the provisioned
+  Grafana dashboards consume them.

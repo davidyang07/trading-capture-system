@@ -5,6 +5,7 @@
 # cannot transfer (the repo's documented OneDrive limitation).
 apps/
 docs/
+infrastructure/
 .git/
 .github/
 .pnpm-store/
