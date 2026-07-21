@@ -1,8 +1,9 @@
 packages:
   - "apps/*"
-# Dependency postinstall build scripts stay blocked (supply-chain conservative):
-# both packages ship prebuilt platform binaries via optionalDependencies, so the
-# compile-from-source fallback is unnecessary here.
+# Dependency postinstall build scripts are deny-by-default. The watcher and resolver ship prebuilt
+# optional binaries and do not need scripts; sharp is explicitly allowed because Next.js uses its
+# pinned install step to select and verify the platform image-processing binary.
 allowBuilds:
   "@parcel/watcher": false
+  sharp: true
   unrs-resolver: false

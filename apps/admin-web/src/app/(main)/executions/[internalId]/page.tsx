@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Column } from "primereact/column";
 import Table from "@/components/Table/Table";
@@ -32,11 +33,8 @@ function isTip(detail: ExecutionDetail): boolean {
   return tip?.internalId === detail.execution.internalId;
 }
 
-export default function ExecutionDetailPage({
-  params,
-}: {
-  params: { internalId: string };
-}) {
+export default function ExecutionDetailPage() {
+  const params = useParams<{ internalId: string }>();
   const internalId = decodeURIComponent(params.internalId);
   const { data: session } = useSession();
   const canWrite = canWriteExecutions(session ?? null);

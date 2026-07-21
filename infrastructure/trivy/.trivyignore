@@ -1,0 +1,9 @@
+# Trivy ignore file — documented, time-boxed CVE acceptances ONLY.
+#
+# Every entry MUST be a real, reviewed decision with a reason and an owner, e.g.:
+#   # CVE-2025-XXXXX — transitive in <lib>; no fix upstream yet; not reachable from our code.
+#   # Reviewed 2026-07-20 (security). Re-evaluate when <lib> ships a patched release.
+#   CVE-2025-XXXXX
+#
+# Empty by policy: no vulnerabilities are currently suppressed. Do not add blanket ignores to
+# make a scan pass — fix the root cause (bump the base image / dependency) instead.

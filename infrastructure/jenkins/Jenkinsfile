@@ -1,0 +1,210 @@
+// Trading Capture System — declarative delivery pipeline.
+//
+// Flow: checkout -> secret scan -> lint/static -> backend tests + coverage gate -> frontend
+//       checks -> package -> build images -> trivy image scan -> optional deploy.
+//
+// Non-negotiables (enforced below, never weakened):
+//   * Tests are NEVER skipped in CI — the backend stage runs `./mvnw clean verify` (unit +
+//     Testcontainers integration + the JaCoCo 80/70 gate); the frontend stage runs lint,
+//     typecheck, unit tests, and a production build. No `-DskipTests`, no `.only`.
+//   * No credentials are embedded. Secrets come only from the Jenkins credentials store via
+//     withCredentials/credentials(); registries/hosts are parameters, never hard-coded.
+//   * The secret-scan and test stages are mandatory (no `when` that can skip them).
+//
+// Configure the Jenkins job with "Pipeline script from SCM", Script Path =
+// infrastructure/jenkins/Jenkinsfile. Requires a Docker-capable agent (Testcontainers + image
+// builds) with the `docker` CLI, plus the standard Pipeline + Credentials Binding plugins.
+//
+// Validate the syntax without executing (see infrastructure/jenkins/README.md):
+//   java -jar jenkins-cli.jar -s "$JENKINS_URL" -auth $USER:$TOKEN declarative-linter \
+//       < infrastructure/jenkins/Jenkinsfile
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    timeout(time: 60, unit: 'MINUTES')
+    buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '5'))
+  }
+
+  parameters {
+    string(name: 'IMAGE_REGISTRY', defaultValue: 'tcs', description: 'Image name prefix / registry (no trailing slash).')
+    string(name: 'IMAGE_TAG', defaultValue: '', description: 'Image tag; empty = short git SHA.')
+    booleanParam(name: 'PUSH_IMAGES', defaultValue: false, description: 'Push images after a clean trivy scan (needs the registry-credentials credential).')
+    booleanParam(name: 'DEPLOY', defaultValue: false, description: 'Deploy to Kubernetes after a manual approval gate.')
+  }
+
+  environment {
+    // Fail the scan stages on real findings; keep tests un-skippable.
+    TRIVY_SEVERITY = 'HIGH,CRITICAL'
+    MAVEN_OPTS = '-Dmaven.repo.local=.m2-repo'
+    // CI tool images pinned to fixed versions for reproducible scans/validation (the shipped
+    // application base images are digest-pinned in the Dockerfiles). trivy still downloads its
+    // vulnerability DB at runtime, so the DB stays current while the scanner binary is fixed.
+    GITLEAKS_IMAGE = 'zricethezav/gitleaks:v8.24.3'
+    TRIVY_IMAGE = 'aquasec/trivy:0.72.0'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+        script {
+          def imagePrefix = params.IMAGE_REGISTRY?.trim()
+          def requestedTag = params.IMAGE_TAG?.trim()
+          if (!imagePrefix || !(imagePrefix ==~ /[A-Za-z0-9][A-Za-z0-9._:\/-]*/)) {
+            error('IMAGE_REGISTRY must be a non-empty Docker image prefix without shell metacharacters.')
+          }
+          env.RESOLVED_TAG = requestedTag ? requestedTag : env.GIT_COMMIT.take(12)
+          if (!(env.RESOLVED_TAG ==~ /[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}/)) {
+            error('IMAGE_TAG is not a valid Docker tag.')
+          }
+          if (params.DEPLOY && !params.PUSH_IMAGES) {
+            error('DEPLOY requires PUSH_IMAGES so Kubernetes receives the exact scanned artifact.')
+          }
+          env.IMAGE_PREFIX = imagePrefix
+          def firstPathSegment = imagePrefix.tokenize('/')[0]
+          env.REGISTRY_HOST = (firstPathSegment.contains('.') || firstPathSegment.contains(':') ||
+            firstPathSegment == 'localhost') ? firstPathSegment : 'docker.io'
+          echo "Building tag ${env.RESOLVED_TAG} from ${env.GIT_COMMIT}"
+        }
+      }
+    }
+
+    stage('Secret scan') {
+      // Mandatory — no `when`. Fails the build on any committed secret.
+      steps {
+        sh '''
+          docker run --rm -v "$WORKSPACE":/repo -w /repo \
+            "$GITLEAKS_IMAGE" detect --source=. --redact --no-banner \
+            --report-format=sarif --report-path=gitleaks.sarif
+        '''
+      }
+      post {
+        always {
+          archiveArtifacts artifacts: 'gitleaks.sarif', allowEmptyArchive: true
+        }
+      }
+    }
+
+    stage('Lint & static') {
+      steps {
+        sh './mvnw -B -ntp validate'
+        sh 'corepack pnpm install --frozen-lockfile'
+        sh 'corepack pnpm --filter admin-web lint'
+        sh 'corepack pnpm --filter admin-web typecheck'
+      }
+    }
+
+    stage('Backend tests + coverage gate') {
+      // Unit + Testcontainers integration + JaCoCo 80% line / 70% branch. NEVER skipped.
+      steps {
+        sh './mvnw -B -ntp clean verify'
+      }
+      post {
+        always {
+          junit testResults: '**/target/surefire-reports/*.xml, **/target/failsafe-reports/*.xml', allowEmptyResults: true
+          archiveArtifacts artifacts: '**/target/site/jacoco/jacoco.xml', allowEmptyArchive: true
+        }
+      }
+    }
+
+    stage('Frontend tests + build') {
+      steps {
+        sh 'corepack pnpm --filter admin-web test'
+        sh 'corepack pnpm --filter admin-web build'
+      }
+    }
+
+    stage('Package') {
+      steps {
+        // verify already produced the jars; archive them as pipeline artifacts.
+        archiveArtifacts artifacts: 'services/*/target/*.jar', fingerprint: true
+      }
+    }
+
+    stage('Build images') {
+      steps {
+        script {
+          def images = [
+            'trading-service'  : 'services/trading-service/Dockerfile',
+            'account-service'  : 'services/account-service/Dockerfile',
+            'enrichment-service': 'services/enrichment-service/Dockerfile',
+            'allocation-engine': 'services/allocation-engine/Dockerfile',
+            'admin-web'        : 'apps/admin-web/Dockerfile',
+          ]
+          images.each { name, dockerfile ->
+            sh "docker build -f ${dockerfile} -t ${env.IMAGE_PREFIX}/${name}:${env.RESOLVED_TAG} ."
+          }
+        }
+      }
+    }
+
+    stage('Image scan (trivy)') {
+      // Fail on HIGH/CRITICAL fixable vulnerabilities across every image.
+      steps {
+        script {
+          ['trading-service', 'account-service', 'enrichment-service', 'allocation-engine', 'admin-web'].each { name ->
+            sh """
+              docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+                -v "\$WORKSPACE/infrastructure/trivy":/cfg:ro \
+                "\$TRIVY_IMAGE" image --config /cfg/trivy.yaml \
+                --severity ${env.TRIVY_SEVERITY} --exit-code 1 --ignore-unfixed \
+                ${env.IMAGE_PREFIX}/${name}:${env.RESOLVED_TAG}
+            """
+          }
+        }
+      }
+    }
+
+    stage('Push images') {
+      when { expression { params.PUSH_IMAGES } }
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'registry-credentials', usernameVariable: 'REG_USER', passwordVariable: 'REG_PASS')]) {
+          sh 'echo "$REG_PASS" | docker login "$REGISTRY_HOST" -u "$REG_USER" --password-stdin'
+          script {
+            ['trading-service', 'account-service', 'enrichment-service', 'allocation-engine', 'admin-web'].each { name ->
+              sh "docker push ${env.IMAGE_PREFIX}/${name}:${env.RESOLVED_TAG}"
+            }
+          }
+        }
+      }
+    }
+
+    stage('Deploy (manual gate)') {
+      when { expression { params.DEPLOY } }
+      steps {
+        input message: "Deploy tag ${env.RESOLVED_TAG} to the tcs namespace?", ok: 'Deploy'
+        withCredentials([file(credentialsId: 'kubeconfig', variable: 'KUBECONFIG')]) {
+          script {
+            // Real secrets must already exist (provisioned out-of-band from a secret manager). We
+            // never apply the placeholder example Secret from CI — it lives under examples/ and the
+            // non-recursive apply below skips it; this assertion fails fast if it is missing.
+            sh 'kubectl -n tcs get secret tcs-secrets >/dev/null'
+            // Apply config + workloads (non-recursive: the examples/ placeholder Secret is skipped).
+            sh 'kubectl -n tcs apply -f infrastructure/kubernetes/'
+            // Roll out the exact tag this pipeline built + scanned + pushed (the manifests carry a
+            // default pin; set the image so build->scan->deploy stays a single immutable artifact).
+            def deployments = ['trading-service', 'account-service', 'enrichment-service', 'allocation-engine', 'admin-web']
+            deployments.each { name ->
+              sh "kubectl -n tcs set image deploy/${name} ${name}=${env.IMAGE_PREFIX}/${name}:${env.RESOLVED_TAG}"
+            }
+            // Wait in dependency order. Rollback: kubectl -n tcs rollout undo deploy/<name>
+            // (see infrastructure/kubernetes/README.md).
+            ['account-service', 'enrichment-service', 'trading-service', 'allocation-engine', 'admin-web'].each { name ->
+              sh "kubectl -n tcs rollout status deploy/${name} --timeout=180s"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      cleanWs()
+    }
+  }
+}

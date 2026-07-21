@@ -1,0 +1,24 @@
+# Ingress — admin-web is the sole browser-facing tier; all API traffic flows through its BFF, so
+# only admin-web is exposed externally. The backend services stay ClusterIP-internal (defense in
+# depth: their unauthenticated /actuator/prometheus and springdoc are never Ingress-reachable).
+# Set the host to your real DNS name and add TLS at deploy time.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: tcs-ingress
+  namespace: tcs
+  labels:
+    app.kubernetes.io/part-of: trading-capture-system
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: tcs.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-web
+                port:
+                  name: http

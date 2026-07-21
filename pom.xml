@@ -21,6 +21,9 @@
     <properties>
         <java.version>21</java.version>
         <quickfixj.version>2.3.2</quickfixj.version>
+        <!-- QuickFIX/J 2.3.2 requests MINA 2.2.4. Pin the compatible 2.2.x security release so
+             fixable MINA deserialization CVEs never enter the allocation-engine image. -->
+        <mina.version>2.2.9</mina.version>
         <logstash-logback-encoder.version>8.1</logstash-logback-encoder.version>
         <springdoc.version>2.8.9</springdoc.version>
         <avro.version>1.12.0</avro.version>
@@ -101,6 +104,11 @@
                 <groupId>org.quickfixj</groupId>
                 <artifactId>quickfixj-messages-fix44</artifactId>
                 <version>${quickfixj.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.mina</groupId>
+                <artifactId>mina-core</artifactId>
+                <version>${mina.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.logstash.logback</groupId>

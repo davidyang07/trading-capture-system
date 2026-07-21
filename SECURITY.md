@@ -154,7 +154,8 @@ Actuator exposure is `health,info` only across all services (verified by test:
 `/actuator/env`, `/actuator/beans`, `/actuator/mappings` are **404** even to an admin token, and
 **401** to an anonymous caller because the security chain rejects non-public paths first). Health
 detail is not shown for anonymous callers. No env/config/bean/heap/thread/logger/shutdown endpoint
-is reachable. Prometheus scraping is added under a protected/observability boundary in Phase 11.
+is reachable. `/actuator/prometheus` exposes metrics without JWT business access and is restricted
+to in-namespace traffic by the Kubernetes NetworkPolicies.
 
 ## 7. CORS / CSRF / sessions
 
@@ -183,7 +184,7 @@ path variables.
 
 ## 10. Live verification
 
-Phase 9 adds live Keycloak-backed tests (`libs/test-support` `KeycloakTestContainer` imports this
+Live Keycloak-backed tests (`libs/test-support` `KeycloakTestContainer`) import this
 exact realm; tests acquire **real** tokens): investor and admin user tokens (Authorization-Code
 realm mappings proven via a dev-only direct-grant client), the `allocation-engine` service-account
 client-credentials token, an insufficient-scope machine token, and a wrong-audience token. These

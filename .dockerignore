@@ -13,6 +13,7 @@
 # Local-only agent config and internal docs (never in an image).
 .claude/
 docs/
+infrastructure/
 AGENTS.md
 CLAUDE.md
 CLAUDE.local.md

@@ -12,6 +12,26 @@ Keycloak, Kafka, and Schema Registry) wired together with Docker Compose.
 
 ---
 
+## Current implementation status
+
+The portfolio build is feature-complete across the application and delivery layers:
+
+| Area | Current state |
+|---|---|
+| Services and data | Four Spring Boot services with schema-per-service ownership, Flyway migrations, immutable execution/ledger history, and UTC/`BigDecimal` contract discipline |
+| Messaging | Kafka FIX ingestion, versioned Avro contracts, Schema Registry compatibility checks, durable idempotency, and transactional-outbox publication |
+| Security | Keycloak OAuth 2.0/OIDC, issuer + audience validation, scopes/roles/ownership enforcement, Auth.js BFF sessions, and live-token authorization tests |
+| Frontend | Typed Next.js workflows for orders, executions, accounts, and reference data with accessibility, unit tests, and deterministic Playwright coverage |
+| Reliability | Persisted allocation orchestration, bounded retry/circuit breakers, crash recovery, correlation propagation, Prometheus metrics, and Grafana dashboards |
+| Verification | Maven/JaCoCo quality gates, Testcontainers integration suites, 16 full-system scenarios, hardened multi-stage images, and Compose health orchestration |
+| Delivery | Digest-pinned non-root images, Trivy policy, hardened Kubernetes app-tier manifests, and a declarative Jenkins build/scan/push/deploy pipeline |
+
+Deployment activation still requires environment-owned infrastructure: real secrets, reachable
+MySQL/Redis/Kafka/Schema Registry/Keycloak services, production DNS/TLS, a container registry, and
+a Jenkins/Kubernetes environment. Those boundaries and recovery procedures are documented below.
+
+---
+
 ## Architecture
 
 ```
@@ -85,10 +105,11 @@ resumes from persisted state after a restart.
 - **Protocols:** QuickFIX/J (FIX 4.4 AllocationInstruction parsing)
 - **Testing:** JUnit 5, Mockito, Spring MockMvc slices, Testcontainers (MySQL, Kafka, Redis),
   WireMock (HTTP client tests)
-- **Frontend:** Next.js 14 (App Router), TypeScript, Auth.js (Keycloak PKCE + BFF token
+- **Frontend:** Next.js 15 (App Router), TypeScript, Auth.js (Keycloak PKCE + BFF token
   relay), react-final-form, PrimeReact; jest + Testing Library + jest-axe, Playwright
   (see [`apps/admin-web/README.md`](apps/admin-web/README.md))
-- **Build & tooling:** Maven (multi-module aggregator), pnpm workspace, Docker Compose
+- **Build & delivery:** Maven (multi-module aggregator), pnpm workspace, Docker Compose,
+  digest-pinned Docker images, Trivy, Kubernetes, and Jenkins
 
 ---
 
@@ -102,10 +123,10 @@ resumes from persisted state after a restart.
 | `libs/event-contracts` | Avro event schemas + topic/header catalog and contract tests |
 | `libs/test-support` | Singleton Testcontainers (MySQL, Kafka, Redis) and JWT test fixtures |
 | `apps/admin-web` | Next.js / TypeScript admin operator application |
-| `tests/full-system-tests` | Phase 12 cross-service scenarios (live stack, over REST + Kafka) |
+| `tests/full-system-tests` | Opt-in cross-service scenarios against the live stack over REST + Kafka |
 | `contracts/openapi/` | OpenAPI contract of record per service |
-| `docs/` | Architecture notes, ADRs, the event catalog, and data-ownership design |
-| `infrastructure/`, `scripts/`, `docker-compose*.yml` | Local development + full-stack compose and helper scripts |
+| `infrastructure/` | Local dependencies, observability, hardened Kubernetes manifests, Jenkins pipeline, and Trivy policy |
+| `scripts/`, `docker-compose*.yml` | Local development and full-system orchestration |
 
 ---
 
@@ -171,7 +192,7 @@ corepack pnpm install
 corepack pnpm --filter admin-web dev
 ```
 
-### 5. Run the full stack and the 16 end-to-end scenarios (Phase 12)
+### 5. Run the full stack and the 16 end-to-end scenarios
 
 The full stack runs the four services containerized alongside the infrastructure, with the
 deterministic seed data applied automatically and a health-wait, from one command:
@@ -186,17 +207,75 @@ deterministic seed data applied automatically and a health-wait, from one comman
   services over real HTTP + Kafka + Keycloak.
 - **UI scenarios** run via the Playwright `*.full.spec.ts` specs (`E2E_FULL_STACK=1`) against a
   live admin-web + the containerized services.
-- The 16 scenarios and their proof artifacts are catalogued in `docs/release/system-scenarios.md`.
+- The executable scenario catalog lives in `tests/full-system-tests`; Playwright full-stack flows
+  live in `apps/admin-web/e2e/*.full.spec.ts`.
 
 Keycloak advertises a fixed issuer (`http://localhost:8180`) with dynamic backchannel so the
 browser, the host test harness, and the containers agree on one token issuer; services fetch JWKS
-from the in-network URL via `OIDC_JWK_SET_URI` (ADR-0018). admin-web runs on the host for the UI
+from the in-network URL via `OIDC_JWK_SET_URI` (the frontchannel/backchannel issuer split).
+admin-web runs on the host for the UI
 E2E; an opt-in `--profile ui` starts a fully containerized admin-web for a compose-only demo.
 
 **Rollback / recovery.** The stack is disposable: `full-stack-down.ps1 -Wipe` removes containers
 and volumes; `full-stack-up.ps1 -Build` recreates everything from the pinned images + seeds. No
-state lives outside the named volumes. Image build hardening, Kubernetes, and Jenkins delivery are
-Phase 13.
+state lives outside the named volumes. Container-image hardening, Kubernetes manifests, and the
+Jenkins delivery pipeline are described in **Delivery & deployment** below.
+
+---
+
+## Delivery & deployment
+
+The delivery path turns the verified build into hardened, scannable images and a repeatable
+deployment.
+
+**Hardened images.** Each service and admin-web ships a multi-stage Dockerfile with
+**digest-pinned** base images (supply-chain reproducibility), a **non-root numeric UID**
+(`10001` for services, `1001` for admin-web — so Kubernetes `runAsNonRoot` is satisfiable),
+container-aware JVM heap sizing, OCI image labels, and a dependency-free `HEALTHCHECK`. Build any
+image from the repo root:
+
+```powershell
+docker build -f services/trading-service/Dockerfile -t tcs/trading-service:validation .
+docker build -f apps/admin-web/Dockerfile           -t tcs/admin-web:validation .
+```
+
+**Vulnerability scanning.** `infrastructure/trivy/` holds the trivy policy (fail on fixable
+`HIGH`/`CRITICAL`; `.trivyignore` for reviewed, time-boxed exceptions — empty by policy):
+
+```powershell
+docker run --rm -v /var/run/docker.sock:/var/run/docker.sock `
+  -v "${PWD}/infrastructure/trivy:/cfg:ro" `
+  aquasec/trivy:0.72.0 image --config /cfg/trivy.yaml tcs/trading-service:validation
+```
+
+**Kubernetes.** `infrastructure/kubernetes/` contains plain manifests — namespace, a
+token-less ServiceAccount, default-deny + scoped NetworkPolicies, per-service
+ConfigMap/Deployment/Service, an example (placeholders-only) Secret, and an Ingress exposing only
+admin-web. Every workload has startup/readiness/liveness probes, resource requests+limits, a
+read-only root filesystem, dropped capabilities, and `seccompProfile: RuntimeDefault`;
+allocation-engine is pinned to a single replica (`Recreate`) for its outbox poller. Schema-validate
+with kubeconform (no cluster needed):
+
+```powershell
+docker run --rm -v "${PWD}/infrastructure/kubernetes:/manifests:ro" `
+  ghcr.io/yannh/kubeconform:v0.8.0-alpine -strict -summary /manifests
+```
+
+See [`infrastructure/kubernetes/README.md`](infrastructure/kubernetes/README.md) for deploy,
+rollback (`kubectl rollout undo`), and recovery procedures.
+
+**CI pipeline.** `infrastructure/jenkins/Jenkinsfile` is a declarative pipeline: checkout → secret
+scan (gitleaks) → lint/static → backend tests + JaCoCo gate → frontend tests + build → package →
+build images → trivy scan → opt-in push → manual-gated deploy. **Tests are never skipped**, and no
+credentials are embedded (they come from the Jenkins credentials store). Validate it with the
+Jenkins declarative linter — see [`infrastructure/jenkins/README.md`](infrastructure/jenkins/README.md).
+
+**Validated vs. executed (2026-07-21).** In this environment: Maven `clean verify` (605 tests
+discovered: 595 passed and 10 opt-in full-system tests skipped, all coverage gates met) ✅; admin-web lint/type-check/build and
+76 unit tests ✅; `docker build` for all five images ✅; Trivy vulnerability + secret scans for all
+five images (0 fixable HIGH/CRITICAL findings) ✅; kubeconform (23/23 valid, strict) ✅; and both
+Compose configurations ✅. The **Jenkins declarative linter**, live **kind** rollout, and opt-in
+full-system/Playwright suites require external activation and are not claimed as executed here.
 
 ---
 
@@ -204,11 +283,10 @@ Phase 13.
 
 - **OpenAPI** contracts of record live in `contracts/openapi/` and are served live by each running
   service via springdoc.
-- **Event contracts** (Avro schemas, topic catalog, header conventions, and compatibility rules) are
-  in `libs/event-contracts` and `docs/`.
-- **Architecture decisions** are captured as ADRs in `docs/adr/` — data ownership, the transactional
-  outbox, the allocation state machine, idempotency strategy, money/time discipline, and the
-  security model.
+- **Event contracts** (Avro schemas, topic/header conventions, and compatibility rules) live in
+  [`libs/event-contracts`](libs/event-contracts/README.md).
+- **Architecture and operational rationale** is kept with the behavior it governs: this README,
+  [`SECURITY.md`](SECURITY.md), service READMEs, and the infrastructure READMEs.
 
 ---
 
@@ -229,7 +307,7 @@ A test pyramid is applied per service:
 
 Run everything with `./mvnw -B -ntp verify`, or a single module with
 `./mvnw -B -ntp -pl services/<name> -am test`. A **JaCoCo coverage gate** (80% line / 70% branch,
-generated code excluded) is enforced on `verify` from Phase 12; the `full-system-tests` module and
+generated code excluded) is enforced on `verify`; the `full-system-tests` module and
 the Playwright full specs self-skip unless the live stack is up (they are never disabled to hide a
 defect).
 
@@ -250,20 +328,21 @@ defect).
 
 ---
 
-## Roadmap
+## Current deployment boundaries
 
-Actively evolving areas layered on top of the platform above:
-
-- Reliability and observability: frontend/server correlation proof, business metrics, and
-  Prometheus/Grafana dashboards (Phase 11).
-- Full-system verification: the four services containerized in compose, seeded demo data, a
-  health-wait, the 16 end-to-end scenarios, and a JaCoCo coverage gate (Phase 12; see step 5).
-- Delivery: final hardened container images + trivy scanning, Kubernetes manifests, and a Jenkins
-  CI pipeline (Phase 13).
+- Kubernetes deploys the application tier only; stateful dependencies are supplied by the target
+  environment and referenced by Service DNS.
+- The committed Secret is an example containing development placeholders. Real values must come
+  from Jenkins credentials and an external secret-management path.
+- Production browser authentication requires externally reachable Keycloak and HTTPS ingress
+  hostnames; the committed `tcs.local` values are local-demo defaults.
+- Jenkins syntax validation and a live Kubernetes rollout require external controllers. The
+  repository documents these activation checks without claiming they ran locally.
 
 ---
 
 ## Repository conventions
 
-- Architecture decisions are recorded as ADRs and must be honored or explicitly superseded.
-- Documentation is kept synchronized with actual behavior and contracts.
+- Material architecture decisions are reflected in the public architecture, security, service,
+  and infrastructure documentation and must be honored or explicitly superseded.
+- Documentation is kept synchronized with actual behavior, contracts, and executed verification.

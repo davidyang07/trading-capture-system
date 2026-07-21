@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { Button } from "primereact/button";
 import { Column } from "primereact/column";
@@ -280,11 +281,8 @@ function SecurityLedger({
   );
 }
 
-export default function AccountDetailPage({
-  params,
-}: {
-  params: { accountId: string };
-}) {
+export default function AccountDetailPage() {
+  const params = useParams<{ accountId: string }>();
   const accountId = decodeURIComponent(params.accountId);
   const [refreshToken, setRefreshToken] = useState(0);
   const [cashDialog, setCashDialog] = useState(false);

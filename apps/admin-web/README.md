@@ -1,6 +1,6 @@
 # admin-web — Trading Capture System frontend
 
-A Next.js 14 (App Router) + TypeScript operator/investor application over the Trading
+A Next.js 15 (App Router) + TypeScript operator/investor application over the Trading
 Capture System services. It renders order, execution, and account workflows with role-aware
 navigation, resilient loading/empty/error states, and WCAG 2.1 AA-minded accessibility.
 
@@ -108,8 +108,8 @@ corepack pnpm --filter admin-web test:e2e      # Playwright (needs Keycloak up)
   authorization, which is independently integration-tested by the backend modules.
 - **Live data-flow E2E:** `e2e/*.full.spec.ts` covers seeded order/execution/account operations
   through real services and is gated by `E2E_FULL_STACK=1`. These specs additionally need the
-  trading/account/enrichment services, which are not compose application containers until Phase
-  13. The gate is infrastructure-explicit; default tests do not share or mutate backend data.
+  containerized trading/account/enrichment services started by `scripts/full-stack-up.ps1 -Build`.
+  The gate is infrastructure-explicit; default tests do not share or mutate backend data.
 
 ## Accessibility
 
@@ -118,8 +118,9 @@ Semantic landmarks, a skip link, one `<h1>` per page, labelled inputs with
 color-independent status badges (glyph + text), visible focus, keyboard-operable menus, and a
 `prefers-reduced-motion` guard. Automated checks (jest-axe) plus manual keyboard reasoning.
 
-## Phase 11 boundary
+## Current operational boundary
 
-Observability (frontend tracing/metrics), coverage gates, resilience dashboards, and the
-containerized full-stack Playwright run belong to later phases (11–13). This app deliberately
-does not implement allocation-engine query views (that service exposes no public query API).
+Backend correlation/metrics, coverage gates, resilience dashboards, and containerized full-stack
+Playwright flows are implemented. Browser real-user monitoring and distributed tracing are not
+part of the current observability scope. This app deliberately does not implement allocation-engine
+query views because that service exposes no public query API.
