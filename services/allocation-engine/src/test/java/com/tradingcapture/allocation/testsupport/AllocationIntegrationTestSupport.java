@@ -2,6 +2,7 @@ package com.tradingcapture.allocation.testsupport;
 
 import com.tradingcapture.testsupport.KafkaTestContainer;
 import com.tradingcapture.testsupport.MySqlContainerSupport;
+import org.junit.jupiter.api.Tag;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -12,6 +13,7 @@ import org.springframework.test.context.DynamicPropertySource;
  * producer and test consumers. Concrete classes add {@code @SpringBootTest} and their own
  * topic/group overrides where they need consumer isolation from other cached contexts.
  */
+@Tag("integration")
 public abstract class AllocationIntegrationTestSupport extends MySqlContainerSupport {
 
     /** One mock-registry scope for the whole test JVM (producer and consumers must share it). */

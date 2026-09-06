@@ -5,6 +5,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
  * fail-open behavior on an outage — the database remains authoritative, so a hit is only a hint and
  * a Redis failure never blocks or discards work.
  */
+@Tag("integration")
 class AllocationDedupFilterTest {
 
     private static LettuceConnectionFactory factory;

@@ -5,6 +5,7 @@ import com.tradingcapture.allocation.domain.model.Allocation;
 import com.tradingcapture.allocation.domain.model.AllocationStatus;
 import com.tradingcapture.allocation.domain.repository.AllocationRepository;
 import com.tradingcapture.testsupport.MySqlContainerSupport;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Tag("integration")
 class AllocationOrchestrationSchemaTest extends MySqlContainerSupport {
 
     private static final Instant T1 = Instant.parse("2026-07-17T00:00:01Z");

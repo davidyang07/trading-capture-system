@@ -210,7 +210,8 @@ Orchestration/recovery driver: `tcs.orchestration.*` — `enabled` (default true
 ## Testing
 
 ```powershell
-.\mvnw.cmd -B -ntp -pl services/allocation-engine -am test
+.\mvnw.cmd -B -ntp -pl services/allocation-engine -am test                                  # full suite
+.\mvnw.cmd -B -ntp -pl services/allocation-engine -am test "-DexcludedGroups=integration"   # fast loop, no Docker
 ```
 
-Unit tests run without Docker; integration tests use singleton Testcontainers (MySQL 8.4 + cp-kafka 7.9.1, matching compose) with the in-memory `mock://` schema registry. The retry/DLT suite exercises real broker retry topology with fast deterministic backoff. Local end-to-end against compose: `./scripts/dev-up.ps1` (Kafka + Schema Registry + topics via `kafka-init`), then run the service and produce a FIX string onto `tcs.fix.allocation-instruction.v1`.
+Unit tests run without Docker; integration tests (tagged `integration`) use singleton Testcontainers (MySQL 8.4 + cp-kafka 7.9.1, matching compose) with the in-memory `mock://` schema registry. The retry/DLT suite exercises real broker retry topology with fast deterministic backoff. Local end-to-end against compose: `./scripts/dev-up.ps1` (Kafka + Schema Registry + topics via `kafka-init`), then run the service and produce a FIX string onto `tcs.fix.allocation-instruction.v1`.

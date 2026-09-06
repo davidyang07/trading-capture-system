@@ -11,6 +11,7 @@ import com.tradingcapture.allocation.domain.repository.AllocationRepository;
 import com.tradingcapture.testsupport.MySqlContainerSupport;
 import com.tradingcapture.testsupport.RedisTestContainer;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -37,6 +38,7 @@ import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.options
  * assert persisted state + outbox rows — deterministic, no sleeps, no Kafka.
  */
 @SpringBootTest
+@Tag("integration")
 abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport {
 
     protected static WireMockServer wireMock;
