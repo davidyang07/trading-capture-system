@@ -57,7 +57,8 @@ missing scope/role 403, all in the same RFC 7807 problem shape with `errorCode` 
 authorization matrix is in `SECURITY.md`; `LiveKeycloakAuthorizationTest`
 proves it against a real Keycloak container with real issued tokens (Phase 9).
 
-Public paths (documented): `/actuator/health*`, `/actuator/info`, `/v3/api-docs*`, `/swagger-ui*`.
+Public paths (documented): `/actuator/health*`, `/actuator/info`, `/v3/api-docs*`, `/swagger-ui*`. The springdoc paths are public only while
+`EXPOSE_API_DOCS` is on (default `true` locally; `false` in the Kubernetes ConfigMaps).
 
 ## Persistence
 

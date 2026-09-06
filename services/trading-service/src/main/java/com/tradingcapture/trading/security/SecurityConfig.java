@@ -22,8 +22,10 @@ import org.springframework.security.web.SecurityFilterChain;
  * OAuth2 resource-server configuration (Spring Security 6, ADR-0008).
  *
  * <p>Public paths are exactly: actuator health/info (probes), the actuator Prometheus
- * scrape endpoint (metrics only, ADR-0015), and the springdoc documentation UI — a documented
- * development aid that exposes only the API contract.
+ * scrape endpoint (metrics only, ADR-0015), and — only while springdoc is enabled — the
+ * documentation UI, a development aid that exposes only the API contract. The Kubernetes
+ * ConfigMaps set {@code EXPOSE_API_DOCS=false}, so a deployed service serves no contract
+ * to unauthenticated callers.
  * The machine namespace {@code /internal/**} requires the {@code allocation:process}
  * scope at the chain level in addition to method-level rules. Everything else needs a
  * verified JWT; fine-grained scope/role rules live on the controllers, ownership rules
@@ -38,17 +40,22 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    KeycloakJwtAuthenticationConverter authenticationConverter,
                                                    ProblemDetailAuthenticationEntryPoint entryPoint,
-                                                   ProblemDetailAccessDeniedHandler deniedHandler) throws Exception {
+                                                   ProblemDetailAccessDeniedHandler deniedHandler,
+                                                   @Value("${springdoc.api-docs.enabled}") boolean apiDocsEnabled)
+            throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET,
-                                "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
-                        .requestMatchers(HttpMethod.GET,
-                                "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
-                        .requestMatchers("/internal/**").hasAuthority("SCOPE_allocation:process")
-                        .anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(HttpMethod.GET,
+                            "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll();
+                    if (apiDocsEnabled) {
+                        auth.requestMatchers(HttpMethod.GET,
+                                "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll();
+                    }
+                    auth.requestMatchers("/internal/**").hasAuthority("SCOPE_allocation:process")
+                            .anyRequest().authenticated();
+                })
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
                         .authenticationEntryPoint(entryPoint)

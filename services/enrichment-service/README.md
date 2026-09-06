@@ -51,7 +51,8 @@ client scope). The enforced per-endpoint authorization matrix is in
 `SECURITY.md`; `LiveKeycloakAuthorizationTest` proves it against a real
 Keycloak container with real issued tokens (Phase 9).
 
-Public paths: `/actuator/health*`, `/actuator/info`, `/v3/api-docs*`, `/swagger-ui*`.
+Public paths: `/actuator/health*`, `/actuator/info`, `/v3/api-docs*`, `/swagger-ui*`. The springdoc paths are public only while
+`EXPOSE_API_DOCS` is on (default `true` locally; `false` in the Kubernetes ConfigMaps).
 
 ## Persistence
 

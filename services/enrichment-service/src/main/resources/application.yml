@@ -47,6 +47,15 @@ tcs:
     # Read-through TTL for reference lookups (ADR-0003). Redis is an optimization only.
     ttl: 15m
 
+springdoc:
+  # The contract UI is a development aid, not part of the runtime contract. Anonymous access
+  # (see SecurityConfig) is granted only while this is on; the Kubernetes ConfigMaps set
+  # EXPOSE_API_DOCS=false so deployed environments serve no unauthenticated API contract.
+  api-docs:
+    enabled: ${EXPOSE_API_DOCS:true}
+  swagger-ui:
+    enabled: ${EXPOSE_API_DOCS:true}
+
 management:
   endpoints:
     web:

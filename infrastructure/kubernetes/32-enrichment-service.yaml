@@ -12,6 +12,9 @@ metadata:
 data:
   SPRING_PROFILES_ACTIVE: "json-logs"
   SERVICE_NAME: "enrichment-service"
+  # No unauthenticated API contract from a deployed service; springdoc and its anonymous
+  # security rule are both off (SecurityConfig reads springdoc.api-docs.enabled).
+  EXPOSE_API_DOCS: "false"
   ENRICHMENT_DB_HOST: "mysql"
   ENRICHMENT_DB_PORT: "3306"
 ---

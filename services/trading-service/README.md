@@ -67,7 +67,8 @@ authorization matrix is in `SECURITY.md`; `LiveKeycloakAuthorizationTest`
 proves it against a real Keycloak container with real issued tokens (Phase 9).
 
 Public paths (documented): `/actuator/health*`, `/actuator/info`, `/v3/api-docs*`,
-`/swagger-ui*`.
+`/swagger-ui*`. The springdoc paths are public only while
+`EXPOSE_API_DOCS` is on (default `true` locally; `false` in the Kubernetes ConfigMaps).
 
 ## Persistence
 

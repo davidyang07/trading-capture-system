@@ -4,6 +4,7 @@ import com.tradingcapture.security.KeycloakJwtAuthenticationConverter;
 import com.tradingcapture.security.ProblemAccessDeniedHandler;
 import com.tradingcapture.security.ProblemAuthenticationEntryPoint;
 import com.tradingcapture.security.ResourceServerSecuritySupport;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -22,7 +23,9 @@ import org.springframework.security.web.SecurityFilterChain;
  * requires {@code enrichment:read} or {@code allocation:process}.
  *
  * <p>Public paths: actuator health/info, the Prometheus scrape endpoint (metrics only,
- * ADR-0015), and the springdoc documentation UI.</p>
+ * ADR-0015), and — only while springdoc is enabled — the documentation UI. The Kubernetes
+ * ConfigMaps set {@code EXPOSE_API_DOCS=false}, so a deployed service serves no contract to
+ * unauthenticated callers.</p>
  */
 @Configuration
 @EnableWebSecurity
@@ -34,18 +37,23 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    KeycloakJwtAuthenticationConverter authenticationConverter,
                                                    ProblemAuthenticationEntryPoint entryPoint,
-                                                   ProblemAccessDeniedHandler deniedHandler) throws Exception {
+                                                   ProblemAccessDeniedHandler deniedHandler,
+                                                   @Value("${springdoc.api-docs.enabled}") boolean apiDocsEnabled)
+            throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.GET,
-                                "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
-                        .requestMatchers(HttpMethod.GET,
-                                "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
-                        .requestMatchers("/internal/**")
-                                .hasAnyAuthority("SCOPE_enrichment:read", "SCOPE_allocation:process")
-                        .anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers(HttpMethod.GET,
+                            "/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll();
+                    if (apiDocsEnabled) {
+                        auth.requestMatchers(HttpMethod.GET,
+                                "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll();
+                    }
+                    auth.requestMatchers("/internal/**")
+                            .hasAnyAuthority("SCOPE_enrichment:read", "SCOPE_allocation:process")
+                            .anyRequest().authenticated();
+                })
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))
                         .authenticationEntryPoint(entryPoint)

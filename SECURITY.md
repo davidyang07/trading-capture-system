@@ -113,7 +113,12 @@ audience — a wrong/missing audience is **401** before any scope check.
 | POST | `/internal/v1/executions/resolve` | M | `allocation:process` | — | cross-owner by contract | yes (internal, machine) |
 | PUT | `/internal/v1/executions/allocation-state` | M | `allocation:process` | — | cross-owner by contract | yes (internal, machine) |
 | GET | `/actuator/health`, `/actuator/info` | public | — | — | — | n/a |
-| GET | `/v3/api-docs/**`, `/swagger-ui/**` | public | — | — | — | n/a |
+| GET | `/v3/api-docs/**`, `/swagger-ui/**` | public *(dev only)* | — | — | — | n/a |
+
+Public only while springdoc is enabled. `EXPOSE_API_DOCS` drives both `springdoc.api-docs.enabled`
+and the anonymous rule in each `SecurityConfig`; it defaults to `true` for local runs and the dev
+stack, and the Kubernetes ConfigMaps set it to `false`, so a deployed service serves no API
+contract to unauthenticated callers.
 
 ### account-service (audience `account-service`)
 
