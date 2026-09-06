@@ -1,0 +1,6 @@
+# The service Dockerfiles COPY the checkout into a Linux build stage and run `sh ./mvnw`.
+# On a Windows clone core.autocrlf rewrites the wrapper to CRLF, and /bin/sh then fails with
+# "set: Illegal option -" — so the images cannot be built at all. Pinning LF in the working
+# tree (not just in the object store) keeps a Windows checkout buildable.
+mvnw text eol=lf
+*.sh text eol=lf
