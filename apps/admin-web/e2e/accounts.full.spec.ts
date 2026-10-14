@@ -1,16 +1,7 @@
-import { test, expect, type Locator } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 
-import { login } from "./helpers";
+import { chooseOption, login } from "./helpers";
 import { ADMIN, INVESTOR1 } from "./credentials";
-
-// PrimeReact dropdowns render a labelled textbox plus a hidden labelled <select>; drive the
-// textbox by keyboard (as workflows.spec.ts does) so the dialog's enter animation cannot eat a click.
-async function choose(scope: Locator, label: string, option: string): Promise<void> {
-  const control = scope.getByRole("textbox", { name: label });
-  await control.focus();
-  await control.press("ArrowDown");
-  await scope.page().getByRole("option", { name: option, exact: true }).click();
-}
 
 test.describe("accounts workflow (full stack)", () => {
   test.skip(
@@ -48,8 +39,8 @@ test.describe("accounts workflow (full stack)", () => {
     await page.getByRole("tab", { name: "Cash" }).click();
     await page.getByRole("button", { name: /post cash transaction/i }).click();
     let dialog = page.getByRole("dialog", { name: "Post cash transaction" });
-    await choose(dialog, "Direction", "Credit");
-    await choose(dialog, "Type", "Deposit");
+    await chooseOption(dialog, "Direction", "Credit");
+    await chooseOption(dialog, "Type", "Deposit");
     await dialog.getByRole("textbox", { name: "Amount" }).fill("17.25");
     await dialog.getByRole("textbox", { name: "Currency" }).fill("USD");
     await dialog.getByRole("textbox", { name: "Description" }).fill(runRef);
@@ -63,8 +54,8 @@ test.describe("accounts workflow (full stack)", () => {
     // restored. The audit rows intentionally remain immutable and are uniquely described.
     await page.getByRole("button", { name: /post cash transaction/i }).click();
     dialog = page.getByRole("dialog", { name: "Post cash transaction" });
-    await choose(dialog, "Direction", "Debit");
-    await choose(dialog, "Type", "Withdrawal");
+    await chooseOption(dialog, "Direction", "Debit");
+    await chooseOption(dialog, "Type", "Withdrawal");
     await dialog.getByRole("textbox", { name: "Amount" }).fill("17.25");
     await dialog.getByRole("textbox", { name: "Currency" }).fill("USD");
     await dialog
@@ -80,7 +71,10 @@ test.describe("accounts workflow (full stack)", () => {
   }) => {
     await login(page, INVESTOR1());
     await page.goto("/accounts/ACC-SEED-INV2");
-    await expect(page.getByRole("alert")).toContainText("was not found");
+    // Filter by text: Next's route announcer is also role="alert".
+    await expect(
+      page.getByRole("alert").filter({ hasText: "was not found" })
+    ).toBeVisible();
     await expect(page.getByText("Investor Two Cash")).toHaveCount(0);
   });
 });

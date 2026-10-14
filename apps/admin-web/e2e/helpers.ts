@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 
 interface Creds {
   username: string;
@@ -29,4 +29,21 @@ export async function login(page: Page, user: Creds): Promise<void> {
 export async function logout(page: Page): Promise<void> {
   await page.getByRole("button", { name: /log out/i }).click();
   await page.waitForURL(/\/login/);
+}
+
+/**
+ * Picks an option in a PrimeReact dropdown. The dropdown renders a labelled textbox plus a hidden
+ * <select> with the same label, so getByLabel is ambiguous; this drives the textbox by keyboard,
+ * which also keeps a dialog's enter animation from swallowing the click.
+ */
+export async function chooseOption(
+  scope: Page | Locator,
+  label: string,
+  option: string
+): Promise<void> {
+  const control = scope.getByRole("textbox", { name: label, exact: true });
+  await control.focus();
+  await control.press("ArrowDown");
+  const page = "page" in scope ? scope.page() : scope;
+  await page.getByRole("option", { name: option, exact: true }).click();
 }

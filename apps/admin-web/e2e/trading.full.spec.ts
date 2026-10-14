@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { login } from "./helpers";
+import { chooseOption, login } from "./helpers";
 import { ADMIN, INVESTOR1 } from "./credentials";
 
 // Data flows need the trading/account/enrichment services (containerized in Phase 13).
@@ -16,19 +16,15 @@ test.describe("trading workflow (full stack)", () => {
 
     await page.getByRole("textbox", { name: "Account ID" }).fill("ACC-SEED-INV1");
     await page.getByRole("textbox", { name: "Instrument ID" }).fill("AAPL");
-    await page.getByLabel("Side").click();
-    await page.getByRole("option", { name: "Buy" }).click();
-    await page.getByLabel("Order type").click();
-    await page.getByRole("option", { name: "Limit" }).click();
-    await page.getByRole("textbox", { name: "Price" }).fill("189.25");
-    await page.getByLabel("Price type").click();
-    await page.getByRole("option", { name: "Per Unit" }).click();
+    await chooseOption(page, "Side", "Buy");
+    await chooseOption(page, "Order type", "Limit");
+    await page.getByRole("textbox", { name: "Price", exact: true }).fill("189.25");
+    await chooseOption(page, "Price type", "Per Unit");
     await page.getByRole("textbox", { name: "Currency" }).fill("USD");
     await page.getByRole("textbox", { name: "Quantity" }).fill("100");
-    await page.getByLabel("Settlement type").click();
-    await page.getByRole("option", { name: "Regular" }).click();
+    await chooseOption(page, "Settlement type", "Regular");
     await page
-      .getByLabel("Settlement date")
+      .getByRole("textbox", { name: "Settlement date" })
       .fill(new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10));
 
     await page.getByRole("button", { name: /create order/i }).click();
@@ -45,7 +41,8 @@ test.describe("trading workflow (full stack)", () => {
     const quantity = page.getByRole("textbox", { name: "Quantity" });
     await quantity.fill("101.2500");
     await page.getByRole("button", { name: "Save changes" }).click();
-    await expect(page.getByText("101.2500 USD")).toBeVisible();
+    // Quantities render without a currency (formatQuantity).
+    await expect(page.getByText("101.2500", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Delete" }).click();
     await page.getByRole("button", { name: "Yes" }).click();
@@ -59,19 +56,15 @@ test.describe("trading workflow (full stack)", () => {
     await page.goto("/orders/new");
     await page.getByRole("textbox", { name: "Account ID" }).fill("ACC-SEED-ADMIN");
     await page.getByRole("textbox", { name: "Instrument ID" }).fill("AAPL");
-    await page.getByLabel("Side").click();
-    await page.getByRole("option", { name: "Buy" }).click();
-    await page.getByLabel("Order type").click();
-    await page.getByRole("option", { name: "Limit" }).click();
-    await page.getByRole("textbox", { name: "Price" }).fill("189.25");
-    await page.getByLabel("Price type").click();
-    await page.getByRole("option", { name: "Per Unit" }).click();
+    await chooseOption(page, "Side", "Buy");
+    await chooseOption(page, "Order type", "Limit");
+    await page.getByRole("textbox", { name: "Price", exact: true }).fill("189.25");
+    await chooseOption(page, "Price type", "Per Unit");
     await page.getByRole("textbox", { name: "Currency" }).fill("USD");
     await page.getByRole("textbox", { name: "Quantity" }).fill("10.0000");
-    await page.getByLabel("Settlement type").click();
-    await page.getByRole("option", { name: "Regular" }).click();
+    await chooseOption(page, "Settlement type", "Regular");
     await page
-      .getByLabel("Settlement date")
+      .getByRole("textbox", { name: "Settlement date" })
       .fill(new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10));
     await page.getByRole("button", { name: "Create order" }).click();
     await page.waitForURL(

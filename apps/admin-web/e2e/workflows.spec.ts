@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { ADMIN, INVESTOR1 } from "./credentials";
-import { login } from "./helpers";
+import { chooseOption, login } from "./helpers";
 import {
   createdOrder,
   emptyPage,
@@ -8,13 +8,6 @@ import {
   mockDashboard,
   ownedAccount,
 } from "./mock-api";
-
-async function chooseOption(page: Page, label: string, option: string): Promise<void> {
-  const control = page.getByRole("textbox", { name: label });
-  await control.focus();
-  await control.press("ArrowDown");
-  await page.getByRole("option", { name: option }).click();
-}
 
 async function fillOrder(page: Page): Promise<void> {
   await page.getByRole("textbox", { name: "Account ID" }).fill(ownedAccount.accountId);
