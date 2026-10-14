@@ -66,11 +66,17 @@ final class FixMessages {
         return message.toString();
     }
 
-    /** Parseable 35=J with several independent field errors (collect-all observable). */
+    /**
+     * Parseable 35=J with several independent field errors (collect-all observable). It keeps a
+     * business identity (AllocID + a supported AllocTransType, New), so allocation-engine stores
+     * an INVALID allocation, puts the AllocID on the rejection, and absorbs a resend as a business
+     * duplicate. An unsupported trans type would drop the identity: no allocation row, a null
+     * allocId on the event, and no business-key deduplication.
+     */
     static String multiErrorAllocation(String allocId) {
         AllocationInstruction message = new AllocationInstruction();
         message.set(new AllocID(allocId));
-        message.set(new AllocTransType('9'));               // unsupported trans type
+        message.set(new AllocTransType(AllocTransType.NEW));
         message.set(new AllocNoOrdersType(1));
         message.set(new Side('5'));                          // unsupported side
         message.set(new Symbol("AAPL"));

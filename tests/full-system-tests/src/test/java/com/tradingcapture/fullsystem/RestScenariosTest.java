@@ -46,10 +46,12 @@ class RestScenariosTest extends FullSystemTest {
     void investorLacksAdminRoleForReferenceDataMutation() {
         String investor1 = stack.userToken("investor1");
         // Enrichment reference-data mutation requires scope + ADMIN role; an investor is 403.
+        // The body must be valid: request-body validation runs before method security, so an
+        // invalid body would be answered 400 without ever reaching the authorization check.
         FullSystemHarness.Response r = stack.post(
                 FullSystemHarness.ENRICHMENT + "/api/v1/instruments", investor1,
                 Map.of("instrumentId", "ZZZ-" + UUID.randomUUID(), "name", "nope",
-                        "instrumentType", "EQUITY"));
+                        "instrumentType", "EQUITY", "exchangeMic", "XNAS", "currencyCode", "USD"));
         // Authenticated investor, valid scope, lacks ADMIN role -> 403 (not 401, which would mean
         // authentication itself failed and would mask an authz regression).
         assertThat(r.status()).isEqualTo(403);
@@ -67,7 +69,9 @@ class RestScenariosTest extends FullSystemTest {
         FullSystemHarness.Response detail =
                 stack.get(FullSystemHarness.TRADING + "/api/v1/orders/" + orderId, investor1);
         assertThat(detail.status()).isEqualTo(200);
-        assertThat(detail.at("/status").asText()).isEqualTo("NEW");
+        // OrderDetailResponse wraps the order next to its execution history.
+        assertThat(detail.at("/order/orderId").asText()).isEqualTo(orderId);
+        assertThat(detail.at("/order/status").asText()).isEqualTo("NEW");
     }
 
     private FullSystemHarness.Response createOrder(String token) {
