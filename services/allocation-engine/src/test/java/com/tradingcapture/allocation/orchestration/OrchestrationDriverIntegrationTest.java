@@ -1,6 +1,9 @@
 package com.tradingcapture.allocation.orchestration;
 
 import com.tradingcapture.allocation.domain.model.AllocTransType;
+import com.tradingcapture.allocation.domain.model.Allocation;
+import com.tradingcapture.allocation.domain.model.AllocationStatus;
+import com.tradingcapture.allocation.domain.model.OrchestrationFailureCategory;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -12,9 +15,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The recovery/orchestration driver's claim semantics (Increment 10): eligibility, deterministic
- * bounded batches, retry-time gating, terminal/exhausted skipping, and lease-based exclusion +
- * reclamation. Uses the claim transaction directly (no remote calls) with a controllable clock via
- * explicit {@code now}/lease arguments — no sleeps.
+ * bounded batches, retry-time gating, terminal skipping, failing stranded exhausted rows, and
+ * lease-based exclusion + reclamation. Uses the claim transaction directly (no remote calls) with a
+ * controllable clock via explicit {@code now}/lease arguments — no sleeps.
  */
 class OrchestrationDriverIntegrationTest extends OrchestrationIntegrationTestSupport {
 
@@ -41,13 +44,49 @@ class OrchestrationDriverIntegrationTest extends OrchestrationIntegrationTestSup
     }
 
     @Test
-    void skipsTerminalAndAttemptExhaustedRows() {
+    void skipsTerminalRowsAndFailsExhaustedOnesInsteadOfStrandingThem() {
         Long rejected = receivedNew("A-C2-REJ");
         jdbc.update("UPDATE allocations SET status = 'REJECTED' WHERE id = ?", rejected);
         Long exhausted = receivedNew("A-C2-EXH");
         jdbc.update("UPDATE allocations SET attempt_count = max_attempts WHERE id = ?", exhausted);
 
         assertThat(claimService.claim("worker-a", T, LEASE_CUTOFF, 10)).isEmpty();
+
+        assertThat(reload(rejected).getStatus()).isEqualTo(AllocationStatus.REJECTED);
+        Allocation failed = reload(exhausted);
+        assertThat(failed.getStatus()).isEqualTo(AllocationStatus.FAILED);
+        assertThat(failed.getFailureCategory()).isEqualTo(OrchestrationFailureCategory.TERMINAL_ORCHESTRATION);
+        assertThat(failed.getFailureSummary()).startsWith("attempts exhausted in RECEIVED");
+    }
+
+    @Test
+    void lastAttemptAbandonedMidStepIsFailedOnceItsLeaseExpires() {
+        // Executions are bound, then the final attempt dies without recording any outcome (crash,
+        // version conflict, unexpected error): the row keeps its claim and has no attempts left.
+        Long id = receivedNew("A-C6");
+        jdbc.update("""
+                UPDATE allocations SET status = 'EXECUTIONS_ALLOCATED', attempt_count = max_attempts,
+                    claimed_by = 'worker-dead', claimed_at = ? WHERE id = ?
+                """, java.sql.Timestamp.from(T), id);
+
+        // While the lease is fresh it belongs to its worker.
+        Instant oneMinuteLater = T.plus(Duration.ofMinutes(1));
+        claimService.claim("worker-b", oneMinuteLater, oneMinuteLater.minus(Duration.ofMinutes(2)), 10);
+        assertThat(reload(id).getStatus()).isEqualTo(AllocationStatus.EXECUTIONS_ALLOCATED);
+
+        // Once it expires the row is failed terminally rather than left invisible forever.
+        Instant threeMinutesLater = T.plus(Duration.ofMinutes(3));
+        assertThat(claimService.claim("worker-b", threeMinutesLater, threeMinutesLater.minus(Duration.ofMinutes(2)), 10))
+                .isEmpty();
+        Allocation failed = reload(id);
+        assertThat(failed.getStatus()).isEqualTo(AllocationStatus.FAILED);
+        assertThat(failed.getClaimedBy()).isNull();
+        assertThat(jdbc.queryForMap("""
+                SELECT from_status, to_status FROM allocation_state_transitions
+                WHERE allocation_id = ? ORDER BY seq DESC LIMIT 1
+                """, id))
+                .containsEntry("from_status", "EXECUTIONS_ALLOCATED")
+                .containsEntry("to_status", "FAILED");
     }
 
     @Test

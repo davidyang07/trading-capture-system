@@ -8,12 +8,17 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Deterministic execution selection (ADR-0017). Chooses, from a snapshot of resolved executions, a
- * set whose quantities sum exactly to the requested quantity, using a total order that is
- * independent of input order: FIFO by execution {@code transactTime}, tie-broken by {@code execId}
- * then {@code internalId}. Greedy consumption fills earliest-first; the last execution may be
- * partially consumed. Partial allocation is not permitted — insufficient eligible quantity is a
- * typed {@link SelectionResult.Insufficient}, never a partial success.
+ * Deterministic execution selection (ADR-0017). Selects, from a snapshot of resolved executions,
+ * every eligible execution the instruction lists, each consumed <em>whole</em>, sequenced by a total
+ * order that is independent of input order: FIFO by execution {@code transactTime}, tie-broken by
+ * {@code execId} then {@code internalId}.
+ *
+ * <p>Executions are never split: trading-service binds a whole execution to exactly one allocation,
+ * so consuming part of one would bind all of it and strand the remainder (no later allocation could
+ * use it, and the engine's assignment quantity would disagree with trading's). The eligible
+ * executions must therefore sum exactly to the requested quantity: less is a typed
+ * {@link SelectionResult.Insufficient}, more is a typed {@link SelectionResult.ExcessQuantity} —
+ * never a partial success.</p>
  *
  * <p>This is a pure calculation over a snapshot: it does <em>not</em> reserve quantity. The New/
  * Replace transaction re-checks authoritative database state under locking before persisting, so a
@@ -64,23 +69,19 @@ public class ExecutionSelector {
         if (available.compareTo(requested) < 0) {
             return new SelectionResult.Insufficient(scaled(available), scaled(requested));
         }
+        if (available.compareTo(requested) > 0) {
+            return new SelectionResult.ExcessQuantity(scaled(available), scaled(requested));
+        }
 
         List<SelectionResult.SelectedExecution> selections = new ArrayList<>();
-        BigDecimal remaining = scaled(requested);
         int sequence = 1;
         for (SelectionCandidate candidate : eligible) {
-            if (remaining.signum() == 0) {
-                break;
-            }
-            BigDecimal availableBefore = scaled(candidate.allocatableQuantity());
-            BigDecimal take = availableBefore.min(remaining);
+            BigDecimal whole = scaled(candidate.allocatableQuantity());
             selections.add(new SelectionResult.SelectedExecution(
-                    candidate.internalId(), candidate.execId(), take,
-                    availableBefore, availableBefore.subtract(take),
-                    candidate.transactTime(), sequence++));
-            remaining = remaining.subtract(take);
+                    candidate.internalId(), candidate.execId(), whole,
+                    whole, scaled(BigDecimal.ZERO), candidate.transactTime(), sequence++));
         }
-        return new SelectionResult.Complete(selections, scaled(requested).subtract(remaining));
+        return new SelectionResult.Complete(selections, scaled(requested));
     }
 
     private static boolean isEligible(SelectionCandidate candidate, SelectionRequest request) {

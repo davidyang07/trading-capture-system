@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Deterministic execution selection (ADR-0017): eligibility filtering, FIFO ordering with stable
- * tie-breaking, exact-fill quantity invariants, insufficiency (no partial), malformed-input
- * handling, and input-order independence.
+ * tie-breaking, whole-execution exact-fill invariants, insufficiency and excess (never a partial
+ * or split execution), malformed-input handling, and input-order independence.
  */
 class ExecutionSelectorTest {
 
@@ -44,19 +44,31 @@ class ExecutionSelectorTest {
     }
 
     @Test
-    void oneExecutionLargerThanRequiredIsPartiallyConsumed() {
+    void oneExecutionLargerThanRequiredIsNeverSplit() {
+        // Trading binds whole executions: taking 60 of 100 would bind all 100 and strand 40.
         SelectionResult result = selector.select(request("60.0000",
                 List.of(candidate("E1", "100.0000", "2026-07-17T10:00:00Z", true))));
 
-        SelectionResult.Complete complete = (SelectionResult.Complete) result;
-        assertThat(complete.selections().get(0).selectedQuantity()).isEqualByComparingTo("60.0000");
-        assertThat(complete.selections().get(0).availableAfter()).isEqualByComparingTo("40.0000");
+        assertThat(result).isInstanceOfSatisfying(SelectionResult.ExcessQuantity.class, e -> {
+            assertThat(e.availableQuantity()).isEqualByComparingTo("100.0000");
+            assertThat(e.requestedQuantity()).isEqualByComparingTo("60.0000");
+        });
     }
 
     @Test
-    void multipleExecutionsAreConsumedFifoUntilFilled() {
+    void executionsThatOvershootTheRequestAreExcessNotAPartialFill() {
+        // 100 + 100 for an allocation of 150 cannot be met with whole executions.
+        SelectionResult result = selector.select(request("150.0000", List.of(
+                candidate("E1", "100.0000", "2026-07-17T10:00:00Z", true),
+                candidate("E2", "100.0000", "2026-07-17T11:00:00Z", true))));
+
+        assertThat(result).isInstanceOf(SelectionResult.ExcessQuantity.class);
+    }
+
+    @Test
+    void multipleWholeExecutionsAreSequencedFifo() {
         List<SelectionCandidate> candidates = List.of(
-                candidate("E3", "50.0000", "2026-07-17T12:00:00Z", true),
+                candidate("E3", "20.0000", "2026-07-17T12:00:00Z", true),
                 candidate("E1", "40.0000", "2026-07-17T10:00:00Z", true),
                 candidate("E2", "40.0000", "2026-07-17T11:00:00Z", true));
 
@@ -67,6 +79,8 @@ class ExecutionSelectorTest {
                 .containsExactly("X-E1", "X-E2", "X-E3");
         assertThat(complete.selections()).extracting(s -> s.selectedQuantity().toPlainString())
                 .containsExactly("40.0000", "40.0000", "20.0000");
+        assertThat(complete.selections()).allSatisfy(s ->
+                assertThat(s.availableAfter()).isEqualByComparingTo("0.0000"));
         assertThat(complete.totalSelected()).isEqualByComparingTo("100.0000");
     }
 
@@ -100,22 +114,23 @@ class ExecutionSelectorTest {
         String sameTime = "2026-07-17T10:00:00Z";
         List<SelectionCandidate> candidates = List.of(
                 candidate("E2", "60.0000", sameTime, true),
-                candidate("E1", "60.0000", sameTime, true));
+                candidate("E1", "40.0000", sameTime, true));
 
         SelectionResult.Complete complete = (SelectionResult.Complete) selector.select(request("100.0000", candidates));
         // Equal timestamps -> execId order: X-E1 before X-E2.
-        assertThat(complete.selections().get(0).execId()).isEqualTo("X-E1");
-        assertThat(complete.selections().get(0).selectedQuantity()).isEqualByComparingTo("60.0000");
-        assertThat(complete.selections().get(1).selectedQuantity()).isEqualByComparingTo("40.0000");
+        assertThat(complete.selections()).extracting(SelectionResult.SelectedExecution::execId)
+                .containsExactly("X-E1", "X-E2");
+        assertThat(complete.selections()).extracting(SelectionResult.SelectedExecution::sequence)
+                .containsExactly(1, 2);
     }
 
     @Test
     void resultIsIndependentOfInputOrder() {
         List<SelectionCandidate> base = new ArrayList<>(List.of(
-                candidate("E1", "30.0000", "2026-07-17T10:00:00Z", true),
-                candidate("E2", "30.0000", "2026-07-17T11:00:00Z", true),
-                candidate("E3", "30.0000", "2026-07-17T12:00:00Z", true),
-                candidate("E4", "30.0000", "2026-07-17T13:00:00Z", true)));
+                candidate("E1", "25.0000", "2026-07-17T10:00:00Z", true),
+                candidate("E2", "25.0000", "2026-07-17T11:00:00Z", true),
+                candidate("E3", "25.0000", "2026-07-17T12:00:00Z", true),
+                candidate("E4", "25.0000", "2026-07-17T13:00:00Z", true)));
 
         List<String> reference = execIds(selector.select(request("100.0000", base)));
         for (int i = 0; i < 6; i++) {
@@ -127,7 +142,7 @@ class ExecutionSelectorTest {
 
     @Test
     void repeatedIdenticalCallsProduceIdenticalResults() {
-        SelectionRequest req = request("70.0000", List.of(
+        SelectionRequest req = request("80.0000", List.of(
                 candidate("E1", "40.0000", "2026-07-17T10:00:00Z", true),
                 candidate("E2", "40.0000", "2026-07-17T11:00:00Z", true)));
         assertThat(execIds(selector.select(req))).isEqualTo(execIds(selector.select(req)));
@@ -167,9 +182,12 @@ class ExecutionSelectorTest {
         SelectionResult.Complete complete = (SelectionResult.Complete) selector.select(request("85.0000", List.of(
                 candidate("E1", "40.0000", "2026-07-17T10:00:00Z", true),
                 candidate("E2", "40.0000", "2026-07-17T11:00:00Z", true),
-                candidate("E3", "40.0000", "2026-07-17T12:00:00Z", true))));
+                candidate("E3", "5.0000", "2026-07-17T12:00:00Z", true))));
 
-        assertThat(complete.selections()).allSatisfy(s -> assertThat(s.selectedQuantity().signum()).isPositive());
+        assertThat(complete.selections()).allSatisfy(s -> {
+            assertThat(s.selectedQuantity().signum()).isPositive();
+            assertThat(s.selectedQuantity()).isEqualByComparingTo(s.availableBefore()); // whole
+        });
         BigDecimal sum = complete.selections().stream().map(SelectionResult.SelectedExecution::selectedQuantity)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(sum).isEqualByComparingTo("85.0000");

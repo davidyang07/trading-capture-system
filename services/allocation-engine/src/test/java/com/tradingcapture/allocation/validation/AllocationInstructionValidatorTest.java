@@ -61,6 +61,24 @@ class AllocationInstructionValidatorTest {
     }
 
     @Test
+    void newAndReplaceWithoutSettlDateAreMissingARequiredField() {
+        for (char transType : new char[] {'0', '1'}) {
+            List<CollectedError> errors = validator.validate(
+                    extract(FixTestMessages.withoutSettlDate("ALLOC-NOSD-" + transType, transType)));
+
+            assertThat(errors).singleElement().satisfies(error -> {
+                assertThat(error.code()).isEqualTo(ValidationErrorCode.MISSING_REQUIRED_FIELD);
+                assertThat(error.fields()).extracting(CollectedError.FieldRef::fieldId).containsExactly(64);
+            });
+        }
+    }
+
+    @Test
+    void cancelWithoutSettlDateIsValid() {
+        assertThat(validator.validate(extract(FixTestMessages.withoutSettlDate("ALLOC-NOSD-C", '2')))).isEmpty();
+    }
+
+    @Test
     void everyDictionaryRequiredFieldIsDemanded() {
         ExtractedAllocation empty = new ExtractedAllocation(
                 null, null, null, null, null, null, null, null, null, null,

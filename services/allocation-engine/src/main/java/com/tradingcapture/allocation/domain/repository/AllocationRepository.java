@@ -7,17 +7,36 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 
 public interface AllocationRepository extends JpaRepository<Allocation, Long> {
 
-    /**
-     * Business-duplicate lookup on the unique (allocId, allocTransType) key (ADR-0007); also the
-     * original-allocation lookup for Replace/Cancel — the referenced New instruction is
-     * {@code findByAllocIdAndAllocTransType(refAllocId, NEW)}.
-     */
+    /** Business-duplicate lookup on the unique (allocId, allocTransType) key (ADR-0007). */
     Optional<Allocation> findByAllocIdAndAllocTransType(String allocId, AllocTransType allocTransType);
+
+    List<Allocation> findByAllocIdAndAllocTransTypeInOrderByIdDesc(String allocId,
+                                                                   Collection<AllocTransType> types);
+
+    /**
+     * The allocation a Replace/Cancel's RefAllocID (72) refers to: the New <em>or Replace</em>
+     * instruction with that AllocID (so a chain can continue from a replacement), other than the
+     * referencing instruction itself. Prefers the one still live ({@link
+     * com.tradingcapture.allocation.domain.model.AllocationStatus#isSupersedable()}), otherwise the
+     * most recent, so the caller can report why it is ineligible (e.g. already REPLACED).
+     */
+    default Optional<Allocation> findReferencedOriginal(String refAllocId, Long referencingId) {
+        List<Allocation> candidates = findByAllocIdAndAllocTransTypeInOrderByIdDesc(
+                refAllocId, EnumSet.of(AllocTransType.NEW, AllocTransType.REPLACE)).stream()
+                .filter(candidate -> !candidate.getId().equals(referencingId))
+                .toList();
+        return candidates.stream()
+                .filter(candidate -> candidate.getStatus().isSupersedable())
+                .findFirst()
+                .or(() -> candidates.stream().findFirst());
+    }
 
     /**
      * Recovery/orchestration driver work selection (Increment 10). Returns ids of non-terminal
@@ -38,4 +57,23 @@ public interface AllocationRepository extends JpaRepository<Allocation, Long> {
     List<Long> claimEligibleWork(@Param("now") Instant now,
                                  @Param("leaseCutoff") Instant leaseCutoff,
                                  @Param("batchSize") int batchSize);
+
+    /**
+     * Non-terminal allocations that used up every attempt without reaching a terminal state and are
+     * not actively leased — e.g. the last attempt crashed, hit a concurrency conflict, or raised an
+     * unexpected error, none of which records a retry/terminal outcome. {@link #claimEligibleWork}
+     * never selects them again, so the claim transaction fails them terminally instead of leaving
+     * them stranded. Locked {@code FOR UPDATE SKIP LOCKED} like the claim itself.
+     */
+    @Query(value = """
+            SELECT id FROM allocations
+            WHERE status IN ('RECEIVED','VALIDATED','EXECUTIONS_ALLOCATED','EXECUTIONS_RELEASED')
+              AND attempt_count >= max_attempts
+              AND (claimed_at IS NULL OR claimed_at <= :leaseCutoff)
+            ORDER BY id
+            LIMIT :batchSize
+            FOR UPDATE SKIP LOCKED
+            """, nativeQuery = true)
+    List<Long> findStrandedExhaustedWork(@Param("leaseCutoff") Instant leaseCutoff,
+                                         @Param("batchSize") int batchSize);
 }

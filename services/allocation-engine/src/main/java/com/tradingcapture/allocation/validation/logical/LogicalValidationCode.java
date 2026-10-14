@@ -37,6 +37,8 @@ public enum LogicalValidationCode {
     QUANTITY_MISMATCH(ValidationStage.QUANTITY),
     QUANTITY_PRECISION(ValidationStage.QUANTITY),
     INSUFFICIENT_EXECUTION_QUANTITY(ValidationStage.QUANTITY),
+    /** Listed executions total more than the allocation; executions are allocated whole, never split. */
+    EXCESS_EXECUTION_QUANTITY(ValidationStage.QUANTITY),
 
     // Transaction-type prerequisites
     NEW_CONFLICTING_ALLOCATION(ValidationStage.TRANSACTION_TYPE),

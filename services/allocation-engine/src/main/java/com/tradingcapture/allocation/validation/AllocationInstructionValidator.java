@@ -56,6 +56,13 @@ public class AllocationInstructionValidator {
         requireField(errors, 6, m.avgPx());
         requireField(errors, 75, m.tradeDate());
         requireField(errors, 60, m.transactTime());
+        // SettlDate is optional in FIX 4.4 but required here for New/Replace: those complete by
+        // publishing SettlementRequested, whose settlementDate is mandatory. Without it the
+        // allocation would only fail after its executions were bound in trading-service, so it is
+        // rejected at intake instead (a Cancel never settles and may omit it).
+        if ("0".equals(m.allocTransType()) || "1".equals(m.allocTransType())) {
+            requireField(errors, 64, m.settlDate());
+        }
 
         // --- field formats & value domains ---
         BigDecimal quantity = checkDecimal(errors, 53, m.quantity(), QTY_SCALE);

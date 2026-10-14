@@ -57,7 +57,7 @@ Kafka).
 1. Transport: `ErrorHandlingDeserializer` (undeserializable record → acked + logged + metric).
 2. FIX syntax/structure: QuickFIX/J `fromString` with the FIX 4.4 dictionary.
 3. Message type: only 35=J proceeds.
-4. Field validation: dictionary-required presence, formats (decimal scale caps 4/8, dates, timestamps), value domains (AllocTransType 0/1/2, Side 1/2), group-required fields — **all errors collected** (ADR-0012).
+4. Field validation: dictionary-required presence (plus SettlDate (64) on New/Replace — they complete by requesting settlement, so a missing date is rejected here rather than after executions are bound), formats (decimal scale caps 4/8, dates, timestamps), value domains (AllocTransType 0/1/2, Side 1/2), group-required fields — **all errors collected** (ADR-0012).
 5. Intra-message consistency: Replace/Cancel ⇒ RefAllocID; Σ AllocQty = Quantity.
 
 Cross-service logical validation follows field validation during orchestration.
@@ -76,8 +76,9 @@ exposes no public query API.
 
 ### Persisted state machine
 
-Eight persisted states: `RECEIVED INVALID VALIDATED REJECTED EXECUTIONS_ALLOCATED
-EXECUTIONS_RELEASED COMPLETED FAILED` (terminals: `INVALID REJECTED COMPLETED FAILED`).
+Ten persisted states: `RECEIVED INVALID VALIDATED REJECTED EXECUTIONS_ALLOCATED
+EXECUTIONS_RELEASED COMPLETED FAILED REPLACED CANCELLED` (terminals: `INVALID REJECTED COMPLETED FAILED
+REPLACED CANCELLED`).
 `AllocationStateMachine` holds the legal-transition table; `Allocation.transitionTo` rejects any
 illegal move (including out of a terminal) with `IllegalAllocationTransitionException` before mutating
 state, and appends an `allocation_state_transitions` history row. Lifecycles:
@@ -87,6 +88,10 @@ state, and appends an `allocation_state_transitions` history row. Lifecycles:
   the original's executions, then allocate the replacement set).
 - **Cancel:** `RECEIVED → VALIDATED → EXECUTIONS_RELEASED → COMPLETED` (no settlement event).
 - **FAILED** is reachable from any working state when retries are exhausted.
+- **Supersession:** the original a Replace/Cancel references moves `EXECUTIONS_ALLOCATED | COMPLETED →
+  REPLACED | CANCELLED` in the same transaction as that successor's release. Only these two *live*
+  states can be replaced or cancelled, so a superseded allocation is never replaced/cancelled twice and
+  a Replace after a Cancel cannot resurrect it (`V3__allocation_supersession.sql` widens the status CHECKs).
 
 Retryable-vs-terminal is **bookkeeping**, never a new state: `attempt_count`, `max_attempts`,
 `last_attempt_at`, `next_attempt_at`, `failure_category` (`OrchestrationFailureCategory`), and a safe
@@ -131,7 +136,10 @@ Runs after resolution, over a framework-free `LogicalValidationContext` (no HTTP
 in deterministic order: **account** (exists/active/owner/cash/securities) → **instrument**
 (found/ambiguous/inactive/exchange/currency/settlement) → **execution** (not-found/cancelled/superseded/
 already-allocated/instrument+side match/allocatable qty/duplicate ref) → **quantity** (positive/
-precision/account-sum/aggregate-exec-qty) → **transaction-type** (New/Replace/Cancel prerequisites). All
+precision/account-sum/aggregate-exec-qty, which must equal the quantity exactly) → **transaction-type**
+(New/Replace/Cancel prerequisites). A Cancel allocates nothing, so it runs the transaction-type stage only
+(its original must exist and be live). A Replace may re-list executions still bound to the allocation it
+replaces; they count at their full executed quantity because the release step frees them first. All
 business errors are collected, de-duplicated, and ordered by stage → code → identifier.
 `LogicalValidationResult` separates `Valid`, `BusinessRejected`, `DependencyUnavailable` (retryable),
 `DependencyTerminal`, and `Invariant` — dependency failures are never mixed into the business-error
@@ -139,10 +147,12 @@ list, and there is no catch-all "approve on error" fallback.
 
 ### Deterministic execution selection (ADR-0017)
 
-`ExecutionSelector` chooses, from the resolved-execution snapshot, a set whose quantities sum exactly to
-the requested quantity. Total order independent of input order: execution `transactTime` → `execId` →
-`internalId`; greedy earliest-first fill (last execution may be partially consumed). Partial allocation
-is not permitted — insufficient eligible quantity is a typed `Insufficient`, never a partial success.
+`ExecutionSelector` selects every eligible execution the instruction lists, each consumed **whole**,
+and requires them to sum exactly to the requested quantity. Executions are never split: trading-service
+binds a whole execution to one allocation, so taking part of one would bind (and strand) the rest. Less
+eligible quantity is a typed `Insufficient`, more is a typed `ExcessQuantity` — never a partial success.
+Sequencing uses a total order independent of input order: execution `transactTime` → `execId` →
+`internalId`.
 `BigDecimal` scale 4, `RoundingMode.UNNECESSARY`, no floating point; scale > 4 is rejected. Selection is
 a pure snapshot calculation and does **not** reserve quantity — the mutation transaction re-reads
 authoritative state under optimistic locking and the idempotent trading allocate call is the final
@@ -159,12 +169,17 @@ atomic mutation + same-transaction outbox row via `OrchestrationTx`:
   transition, or event; a re-run is a no-op (status guards); executions already allocated to this allocId
   are treated as ours, so a crash between the remote ALLOCATE and the local commit resumes cleanly.
 - **Replace:** validate against the referenced original → release the original's executions (idempotent
-  trading RELEASE, mark the original's assignments released) + `EXECUTIONS_RELEASED` +
-  `ExecutionsReleased` → select + allocate the replacement set → `EXECUTIONS_ALLOCATED` → `COMPLETED` +
-  `SettlementRequested`. A failure before the release commits leaves the original untouched.
-- **Cancel:** validate → release the original's executions + `EXECUTIONS_RELEASED` + `ExecutionsReleased`
-  → `COMPLETED` (no settlement). Released quantity becomes available exactly once; a repeated Cancel is a
-  no-op (already terminal) and emits no second release; history is preserved, never deleted.
+  trading RELEASE, mark the original's assignments released, original → `REPLACED`) +
+  `EXECUTIONS_RELEASED` + `ExecutionsReleased` → select + allocate the replacement set →
+  `EXECUTIONS_ALLOCATED` → `COMPLETED` + `SettlementRequested`. A failure before the release commits
+  leaves the original untouched.
+- **Cancel:** validate against the original → release its executions (original → `CANCELLED`) +
+  `EXECUTIONS_RELEASED` + `ExecutionsReleased` → `COMPLETED` (no settlement). Released quantity becomes
+  available exactly once; a repeated Cancel is rejected (the original is no longer live) and emits no
+  second release; history is preserved, never deleted.
+- **The referenced original** (RefAllocID) is the New **or Replace** instruction with that AllocID, so a
+  replacement can itself be replaced or cancelled later. If a concurrent Replace/Cancel retires the
+  original first, the loser is rejected at its release step.
 
 ### Redis deduplication pre-filter (ADR-0007)
 
@@ -183,7 +198,9 @@ One `@Scheduled` driver serves both normal orchestration and recovery — resumi
 Eligible = non-terminal, `attempt_count < max_attempts`, due (`next_attempt_at` null or past), and not
 actively leased (`claimed_at` null or older than the lease). It skips terminal/exhausted/not-yet-due/
 leased rows; an expired lease is reclaimed. Retryable failures schedule an exponential backoff; exhausted
-attempts escalate to `FAILED`. Metrics `tcs.allocation.orchestration.{steps,driver}` and
+attempts escalate to `FAILED`. A row whose **last** attempt ended without recording any outcome (crash,
+concurrency conflict, unexpected error) would never be claimed again, so once its lease expires the claim
+transaction fails it terminally (`TERMINAL_ORCHESTRATION`, metric `driver{event=exhausted_failed}`). Metrics `tcs.allocation.orchestration.{steps,driver}` and
 `tcs.allocation.dedup` are all low-cardinality (no allocation/account/execution/correlation ids as tags).
 
 ### Orchestration outbox events (ADR-0005)

@@ -3,8 +3,8 @@ package com.tradingcapture.allocation.domain.model;
 /**
  * Persisted allocation state machine (ADR-0006; diagram in docs/architecture/event-flows.md).
  * Phase 7 ingestion writes {@link #RECEIVED} and {@link #INVALID} only; the remaining states
- * belong to Phase 8 orchestration and are declared so the DB CHECK and this enum never need
- * a breaking migration.
+ * belong to Phase 8 orchestration. {@link #REPLACED} and {@link #CANCELLED} mark an allocation
+ * that a later Replace/Cancel instruction superseded (its executions were released).
  */
 public enum AllocationStatus implements CodeEnum {
 
@@ -15,15 +15,31 @@ public enum AllocationStatus implements CodeEnum {
     EXECUTIONS_ALLOCATED,
     EXECUTIONS_RELEASED,
     COMPLETED,
-    FAILED;
+    FAILED,
+    REPLACED,
+    CANCELLED;
 
     @Override
     public String code() {
         return name();
     }
 
-    /** Terminal states never transition again (PARSE_FAILED is raw-message-only, not here). */
+    /**
+     * Terminal states are never advanced by orchestration again (PARSE_FAILED is raw-message-only,
+     * not here). {@link #COMPLETED} is terminal for its own orchestration but may still be
+     * superseded by a later Replace/Cancel — see {@link #isSupersedable()}.
+     */
     public boolean isTerminal() {
-        return this == INVALID || this == REJECTED || this == COMPLETED || this == FAILED;
+        return this == INVALID || this == REJECTED || this == COMPLETED || this == FAILED
+                || this == REPLACED || this == CANCELLED;
+    }
+
+    /**
+     * The live states a Replace/Cancel may supersede: executions are bound
+     * ({@link #EXECUTIONS_ALLOCATED}) or the allocation finished ({@link #COMPLETED}), and no other
+     * instruction has replaced or cancelled it yet.
+     */
+    public boolean isSupersedable() {
+        return this == EXECUTIONS_ALLOCATED || this == COMPLETED;
     }
 }

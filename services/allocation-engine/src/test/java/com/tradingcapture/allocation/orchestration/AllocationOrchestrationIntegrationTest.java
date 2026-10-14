@@ -8,6 +8,9 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -211,9 +214,162 @@ class AllocationOrchestrationIntegrationTest extends OrchestrationIntegrationTes
         // Before the fix this threw IllegalAllocationTransitionException (EXECUTIONS_RELEASED -> REJECTED)
         // and left the replacement stuck non-terminal. It must now reach a legal terminal.
         assertThat(reload(replaceId).getStatus()).isEqualTo(AllocationStatus.REJECTED);
-        // The original's assignment history is retained (released, never deleted).
+        // The original's assignment history is retained (released, never deleted), and its state says
+        // so: its executions were released by the replacement, so it is no longer live.
         assertThat(assignmentsOf("A-ORIG-3")).singleElement()
                 .satisfies(row -> assertThat(row).containsEntry("status", "RELEASED"));
+        assertThat(reload(originalId).getStatus()).isEqualTo(AllocationStatus.REPLACED);
+    }
+
+    // --- Replace/Cancel chains -------------------------------------------------------------------
+
+    private Long completedOriginal(String allocId, String execId) {
+        Long id = persistNew(allocId, "100.0000", List.of(execId));
+        stubAllOkFor(execId, "100.0000");
+        driver.runOnce();
+        assertThat(reload(id).getStatus()).isEqualTo(AllocationStatus.COMPLETED);
+        wireMock.resetAll();
+        stubToken();
+        return id;
+    }
+
+    private Long persistSuccessor(String allocId, AllocTransType type, String refAllocId, List<String> execIds) {
+        return persistAllocation(allocId, type, refAllocId, "AAPL", "1", "100.0000",
+                List.of(new AccountQty("ACC-1", "100.0000")), execIds);
+    }
+
+    @Test
+    void cancelRelistingTheOriginalsExecutionsCompletesAndRetiresTheOriginal() {
+        Long originalId = completedOriginal("A-ORIG-4", "E1");
+        Long cancelId = persistSuccessor("A-CANCEL-2", AllocTransType.CANCEL, "A-ORIG-4", List.of("E1"));
+        // As trading really reports it: E1 is still bound to the original (was rejected before the fix).
+        stubResolve(List.of(boundExecutionJson("E1", "exec_E1", "100.0000", "2026-07-17T10:00:00Z", "A-ORIG-4")));
+        stubAllocationStateOk();
+
+        driver.runOnce();
+
+        assertThat(reload(cancelId).getStatus()).isEqualTo(AllocationStatus.COMPLETED);
+        assertThat(reload(originalId).getStatus()).isEqualTo(AllocationStatus.CANCELLED);
+        assertThat(assignmentsOf("A-ORIG-4")).singleElement()
+                .satisfies(row -> assertThat(row).containsEntry("status", "RELEASED"));
+        assertThat(outboxCount("ExecutionsReleased", "A-CANCEL-2")).isEqualTo(1);
+        assertThat(outboxCount("SettlementRequested", "A-CANCEL-2")).isZero();
+    }
+
+    @Test
+    void replaceRelistingTheOriginalsExecutionsRebindsThemAndRetiresTheOriginal() {
+        Long originalId = completedOriginal("A-ORIG-5", "E1");
+        Long replaceId = persistSuccessor("A-REPL-3", AllocTransType.REPLACE, "A-ORIG-5", List.of("E1"));
+        stubAccountsActive("ACC-1");
+        stubInstrumentActive("AAPL");
+        stubExecutionBoundUntilReleased("E1", "exec_E1", "100.0000", "2026-07-17T10:00:00Z", "A-ORIG-5");
+
+        driver.runOnce();
+
+        assertThat(reload(replaceId).getStatus()).isEqualTo(AllocationStatus.COMPLETED);
+        assertThat(reload(originalId).getStatus()).isEqualTo(AllocationStatus.REPLACED);
+        assertThat(assignmentsOf("A-REPL-3")).singleElement().satisfies(row -> assertThat(row)
+                .containsEntry("execution_id", "exec_E1").containsEntry("status", "ASSIGNED"));
+        assertThat(outboxCount("SettlementRequested", "A-REPL-3")).isEqualTo(1);
+        wireMock.verify(1, putRequestedFor(urlEqualTo("/internal/v1/executions/allocation-state"))
+                .withRequestBody(containing("\"allocationId\":\"A-REPL-3\""))
+                .withRequestBody(containing("ALLOCATE")));
+    }
+
+    @Test
+    void aSupersededAllocationCanNeitherBeReplacedNorCancelledAgain() {
+        Long originalId = completedOriginal("A-ORIG-6", "E1");
+        stubAllocationStateOk();
+        Long cancelId = persistSuccessor("A-CANCEL-3", AllocTransType.CANCEL, "A-ORIG-6", List.of("E1"));
+        driver.runOnce();
+        assertThat(reload(cancelId).getStatus()).isEqualTo(AllocationStatus.COMPLETED);
+
+        // A Replace after the Cancel must not resurrect the allocation, and a repeated Cancel is refused.
+        Long replaceId = persistSuccessor("A-REPL-4", AllocTransType.REPLACE, "A-ORIG-6", List.of("E2"));
+        Long secondCancelId = persistSuccessor("A-CANCEL-4", AllocTransType.CANCEL, "A-ORIG-6", List.of("E1"));
+        stubAccountsActive("ACC-1");
+        stubInstrumentActive("AAPL");
+        stubExecutionEligible("E2", "exec_E2", "100.0000", "2026-07-17T11:00:00Z");
+        wireMock.resetRequests();
+
+        driver.runOnce();
+
+        assertThat(reload(replaceId).getStatus()).isEqualTo(AllocationStatus.REJECTED);
+        assertThat(reload(replaceId).getFailureSummary()).contains("REPLACE_ORIGINAL_INELIGIBLE");
+        assertThat(reload(secondCancelId).getStatus()).isEqualTo(AllocationStatus.REJECTED);
+        assertThat(reload(originalId).getStatus()).isEqualTo(AllocationStatus.CANCELLED);
+        assertThat(assignmentsOf("A-REPL-4")).isEmpty();
+        wireMock.verify(0, putRequestedFor(urlEqualTo("/internal/v1/executions/allocation-state")));
+    }
+
+    @Test
+    void aReplacementCanItselfBeCancelledWhileTheReplacedOriginalCannotBeReplacedTwice() {
+        Long originalId = completedOriginal("A-ORIG-7", "E1");
+        Long replaceId = persistSuccessor("A-REPL-5", AllocTransType.REPLACE, "A-ORIG-7", List.of("E2"));
+        stubAccountsActive("ACC-1");
+        stubInstrumentActive("AAPL");
+        stubExecutionEligible("E2", "exec_E2", "100.0000", "2026-07-17T11:00:00Z");
+        stubAllocationStateOk();
+        driver.runOnce();
+        assertThat(reload(replaceId).getStatus()).isEqualTo(AllocationStatus.COMPLETED);
+        assertThat(reload(originalId).getStatus()).isEqualTo(AllocationStatus.REPLACED);
+
+        Long secondReplaceId = persistSuccessor("A-REPL-6", AllocTransType.REPLACE, "A-ORIG-7", List.of("E3"));
+        Long cancelOfReplacementId = persistSuccessor("A-CANCEL-5", AllocTransType.CANCEL, "A-REPL-5", List.of("E2"));
+        stubExecutionEligible("E3", "exec_E3", "100.0000", "2026-07-17T12:00:00Z");
+
+        driver.runOnce();
+
+        // Before the fix: both Replaces settled, and any Replace/Cancel of A-REPL-5 was NOT_FOUND.
+        assertThat(reload(secondReplaceId).getStatus()).isEqualTo(AllocationStatus.REJECTED);
+        assertThat(outboxCount("SettlementRequested", "A-REPL-6")).isZero();
+        assertThat(reload(cancelOfReplacementId).getStatus()).isEqualTo(AllocationStatus.COMPLETED);
+        assertThat(reload(replaceId).getStatus()).isEqualTo(AllocationStatus.CANCELLED);
+        assertThat(assignmentsOf("A-REPL-5")).singleElement()
+                .satisfies(row -> assertThat(row).containsEntry("status", "RELEASED"));
+    }
+
+    // --- whole-execution allocation ----------------------------------------------------------------
+
+    @Test
+    void executionsThatWouldHaveToBeSplitAreRejectedWithoutBindingAnything() {
+        // 100 + 100 for an allocation of 150: trading binds whole executions, so this used to bind all
+        // 200 to one allocation and strand 50.
+        Long id = persistAllocation("A-SPLIT-1", AllocTransType.NEW, null, "AAPL", "1", "150.0000",
+                List.of(new AccountQty("ACC-1", "150.0000")), List.of("E1", "E2"));
+        stubAccountsActive("ACC-1");
+        stubInstrumentActive("AAPL");
+        stubResolve(List.of(
+                eligibleExecutionJson("E1", "exec_E1", "100.0000", "2026-07-17T10:00:00Z"),
+                eligibleExecutionJson("E2", "exec_E2", "100.0000", "2026-07-17T11:00:00Z")));
+        stubAllocationStateOk();
+
+        driver.runOnce();
+
+        Allocation a = reload(id);
+        assertThat(a.getStatus()).isEqualTo(AllocationStatus.REJECTED);
+        assertThat(a.getFailureSummary()).contains("EXCESS_EXECUTION_QUANTITY");
+        assertThat(assignmentsOf("A-SPLIT-1")).isEmpty();
+        wireMock.verify(0, putRequestedFor(urlEqualTo("/internal/v1/executions/allocation-state")));
+    }
+
+    @Test
+    void wholeExecutionsSummingExactlyToTheQuantityAreAllAssignedInFull() {
+        Long id = persistAllocation("A-WHOLE-1", AllocTransType.NEW, null, "AAPL", "1", "150.0000",
+                List.of(new AccountQty("ACC-1", "150.0000")), List.of("E1", "E2"));
+        stubAccountsActive("ACC-1");
+        stubInstrumentActive("AAPL");
+        stubResolve(List.of(
+                eligibleExecutionJson("E1", "exec_E1", "100.0000", "2026-07-17T10:00:00Z"),
+                eligibleExecutionJson("E2", "exec_E2", "50.0000", "2026-07-17T11:00:00Z")));
+        stubAllocationStateOk();
+
+        driver.runOnce();
+
+        assertThat(reload(id).getStatus()).isEqualTo(AllocationStatus.COMPLETED);
+        assertThat(assignmentsOf("A-WHOLE-1")).extracting(row -> new java.math.BigDecimal(
+                row.get("allocated_qty").toString()).stripTrailingZeros().toPlainString())
+                .containsExactly("100", "50");
     }
 
     @Test

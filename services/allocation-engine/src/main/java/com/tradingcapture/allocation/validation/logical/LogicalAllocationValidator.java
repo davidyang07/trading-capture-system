@@ -3,6 +3,7 @@ package com.tradingcapture.allocation.validation.logical;
 import com.tradingcapture.allocation.client.AccountValidationClient.AccountValidation;
 import com.tradingcapture.allocation.client.InstrumentResolutionClient.InstrumentResolution;
 import com.tradingcapture.allocation.client.TradingExecutionClient.ExecutionResolution;
+import com.tradingcapture.allocation.domain.model.AllocTransType;
 import com.tradingcapture.allocation.domain.model.AllocationStatus;
 import com.tradingcapture.allocation.validation.logical.LogicalValidationContext.AccountLine;
 import com.tradingcapture.allocation.validation.logical.LogicalValidationContext.AllocationView;
@@ -24,16 +25,19 @@ import java.util.Set;
  * failures are represented by their own result variants — never mixed into the business-error list.
  *
  * <p>Stages run in {@link ValidationStage} order (account → instrument → execution → quantity →
- * transaction-type) and all independent business errors are collected, not short-circuited.</p>
+ * transaction-type) and all independent business errors are collected, not short-circuited. A
+ * Cancel allocates nothing — it only releases the allocation it references — so it runs the
+ * transaction-type stage alone.</p>
+ *
+ * <p>Executions are allocated whole (trading-service binds an entire execution to one allocation),
+ * so the eligible executions an instruction lists must sum exactly to its quantity. A Replace may
+ * re-list executions currently bound to the allocation it replaces: they are released first, so
+ * they count at their full executed quantity.</p>
  */
 @Component
 public class LogicalAllocationValidator {
 
     private static final int MAX_QUANTITY_SCALE = 4;
-
-    /** Original-allocation states from which a Replace/Cancel may proceed. */
-    private static final Set<AllocationStatus> REPLACEABLE_OR_CANCELLABLE =
-            EnumSet.of(AllocationStatus.EXECUTIONS_ALLOCATED, AllocationStatus.COMPLETED);
 
     /** Existing-allocation states that make a fresh New for the same id a conflict. */
     private static final Set<AllocationStatus> NEW_CONFLICT_STATES =
@@ -48,10 +52,12 @@ public class LogicalAllocationValidator {
         List<LogicalValidationError> errors = new ArrayList<>();
         AllocationView allocation = context.allocation();
 
-        validateAccounts(allocation, context.accountResults(), errors);
-        validateInstrument(allocation, context.instrumentResults(), context.supportedSettlTypes(), errors);
-        validateExecutions(allocation, context.executionResults(), errors);
-        validateQuantities(allocation, context.executionResults(), errors);
+        if (allocation.transType() != AllocTransType.CANCEL) {
+            validateAccounts(allocation, context.accountResults(), errors);
+            validateInstrument(allocation, context.instrumentResults(), context.supportedSettlTypes(), errors);
+            validateExecutions(allocation, context.executionResults(), errors);
+            validateQuantities(allocation, context.executionResults(), errors);
+        }
         validateTransactionType(allocation, context.existingAllocation(), errors);
 
         if (errors.isEmpty()) {
@@ -180,7 +186,8 @@ public class LogicalAllocationValidator {
                 errors.add(error(LogicalValidationCode.EXECUTION_SIDE_MISMATCH, execId,
                         "execution " + execId + " side " + result.side() + " != " + allocation.side()));
             }
-            if (result.allocatableQuantity() == null || result.allocatableQuantity().signum() <= 0) {
+            BigDecimal usable = usableQuantity(allocation, result);
+            if (usable == null || usable.signum() <= 0) {
                 errors.add(error(LogicalValidationCode.EXECUTION_NO_QUANTITY, execId,
                         "execution " + execId + " has no allocatable quantity"));
             }
@@ -189,9 +196,19 @@ public class LogicalAllocationValidator {
 
     /** A Replace may retain executions already allocated to the very allocation it replaces. */
     private static boolean retainedByReplace(AllocationView allocation, ExecutionResolution result) {
-        return allocation.transType() == com.tradingcapture.allocation.domain.model.AllocTransType.REPLACE
+        return allocation.transType() == AllocTransType.REPLACE
                 && allocation.refAllocId() != null
+                && "ALREADY_ALLOCATED".equals(result.reason())
                 && allocation.refAllocId().equals(result.allocationId());
+    }
+
+    /**
+     * Quantity this instruction can allocate from the execution: its allocatable quantity, or — for an
+     * execution retained from the replaced allocation (trading reports 0 allocatable while it is still
+     * bound there) — its full executed quantity, which the release step frees before allocating.
+     */
+    private static BigDecimal usableQuantity(AllocationView allocation, ExecutionResolution result) {
+        return retainedByReplace(allocation, result) ? result.executedQuantity() : result.allocatableQuantity();
     }
 
     // --- quantity stage ------------------------------------------------------------------------
@@ -233,6 +250,11 @@ public class LogicalAllocationValidator {
                 errors.add(error(LogicalValidationCode.INSUFFICIENT_EXECUTION_QUANTITY, allocation.allocId(),
                         "eligible execution quantity " + allocatable.stripTrailingZeros().toPlainString()
                                 + " < allocation quantity " + quantity.stripTrailingZeros().toPlainString()));
+            } else if (allocatable.compareTo(quantity) > 0) {
+                errors.add(error(LogicalValidationCode.EXCESS_EXECUTION_QUANTITY, allocation.allocId(),
+                        "eligible execution quantity " + allocatable.stripTrailingZeros().toPlainString()
+                                + " > allocation quantity " + quantity.stripTrailingZeros().toPlainString()
+                                + " (executions are allocated whole, never split)"));
             }
         }
     }
@@ -241,9 +263,12 @@ public class LogicalAllocationValidator {
         BigDecimal total = BigDecimal.ZERO;
         for (String execId : new HashSet<>(allocation.execIds())) {
             ExecutionResolution result = find(results, r -> execId.equals(r.execId()));
-            if (result != null && result.allocatableQuantity() != null
-                    && (result.eligible() || retainedByReplace(allocation, result))) {
-                total = total.add(result.allocatableQuantity());
+            if (result == null || !(result.eligible() || retainedByReplace(allocation, result))) {
+                continue;
+            }
+            BigDecimal usable = usableQuantity(allocation, result);
+            if (usable != null) {
+                total = total.add(usable);
             }
         }
         return total;
@@ -266,7 +291,7 @@ public class LogicalAllocationValidator {
                             "original allocation " + allocation.refAllocId() + " was not found"));
                     return;
                 }
-                if (!REPLACEABLE_OR_CANCELLABLE.contains(existing.status())) {
+                if (!existing.status().isSupersedable()) {
                     errors.add(error(LogicalValidationCode.REPLACE_ORIGINAL_INELIGIBLE, allocation.refAllocId(),
                             "original allocation is in state " + existing.status()
                                     + " and cannot be replaced"));
@@ -286,7 +311,7 @@ public class LogicalAllocationValidator {
                             "original allocation " + allocation.refAllocId() + " was not found"));
                     return;
                 }
-                if (!REPLACEABLE_OR_CANCELLABLE.contains(existing.status())) {
+                if (!existing.status().isSupersedable()) {
                     errors.add(error(LogicalValidationCode.CANCEL_ORIGINAL_INELIGIBLE, allocation.refAllocId(),
                             "original allocation is in state " + existing.status()
                                     + " and cannot be cancelled"));

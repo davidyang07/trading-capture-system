@@ -14,14 +14,19 @@ import static org.assertj.core.api.Assertions.assertThatNoException;
 
 /**
  * The ADR-0006 legal-transition table and the {@link Allocation#transitionTo} guard: every legal
- * edge is accepted, every other edge (and every move out of a terminal state) is rejected, and
- * the enum's terminal set matches the table's dead-ends.
+ * edge is accepted, every other edge (and every move out of a dead-end) is rejected, and the enum's
+ * terminal set matches the table's dead-ends plus {@code COMPLETED}, which only keeps the
+ * supersession edges ({@code -> REPLACED / CANCELLED}).
  */
 class AllocationStateMachineTest {
 
     private static final Set<AllocationStatus> TERMINALS = EnumSet.of(
             AllocationStatus.INVALID, AllocationStatus.REJECTED,
-            AllocationStatus.COMPLETED, AllocationStatus.FAILED);
+            AllocationStatus.COMPLETED, AllocationStatus.FAILED,
+            AllocationStatus.REPLACED, AllocationStatus.CANCELLED);
+
+    private static final Set<AllocationStatus> SUPERSESSION =
+            EnumSet.of(AllocationStatus.REPLACED, AllocationStatus.CANCELLED);
 
     // The canonical table, restated independently of the production map so a silent edit to
     // either side is caught.
@@ -35,8 +40,10 @@ class AllocationStateMachineTest {
             case EXECUTIONS_RELEASED -> EnumSet.of(AllocationStatus.EXECUTIONS_ALLOCATED,
                     AllocationStatus.COMPLETED, AllocationStatus.REJECTED, AllocationStatus.FAILED);
             case EXECUTIONS_ALLOCATED -> EnumSet.of(AllocationStatus.COMPLETED,
-                    AllocationStatus.EXECUTIONS_RELEASED, AllocationStatus.FAILED);
-            case INVALID, REJECTED, COMPLETED, FAILED -> EnumSet.noneOf(AllocationStatus.class);
+                    AllocationStatus.EXECUTIONS_RELEASED, AllocationStatus.FAILED,
+                    AllocationStatus.REPLACED, AllocationStatus.CANCELLED);
+            case COMPLETED -> EnumSet.of(AllocationStatus.REPLACED, AllocationStatus.CANCELLED);
+            case INVALID, REJECTED, FAILED, REPLACED, CANCELLED -> EnumSet.noneOf(AllocationStatus.class);
         };
     }
 
@@ -68,12 +75,44 @@ class AllocationStateMachineTest {
 
     @ParameterizedTest
     @EnumSource(AllocationStatus.class)
-    void terminalStatesHaveNoOutgoingEdgesAndAgreeWithTheEnum(AllocationStatus state) {
-        boolean deadEnd = AllocationStateMachine.legalNextStates(state).isEmpty();
-        assertThat(deadEnd)
-                .as("state machine dead-end must match AllocationStatus.isTerminal() for %s", state)
+    void terminalStatesHaveNoOrchestrationEdgesAndAgreeWithTheEnum(AllocationStatus state) {
+        // Terminal = orchestration never advances it: no outgoing edge other than supersession.
+        Set<AllocationStatus> orchestrationEdges = EnumSet.noneOf(AllocationStatus.class);
+        orchestrationEdges.addAll(AllocationStateMachine.legalNextStates(state));
+        if (state == AllocationStatus.COMPLETED) {
+            orchestrationEdges.removeAll(SUPERSESSION);
+        }
+        assertThat(orchestrationEdges.isEmpty())
+                .as("terminal-for-orchestration must match AllocationStatus.isTerminal() for %s", state)
                 .isEqualTo(state.isTerminal());
         assertThat(TERMINALS.contains(state)).isEqualTo(state.isTerminal());
+    }
+
+    @ParameterizedTest
+    @EnumSource(AllocationStatus.class)
+    void onlyLiveAllocationsCanBeSuperseded(AllocationStatus state) {
+        boolean supersedable = AllocationStateMachine.legalNextStates(state).containsAll(SUPERSESSION);
+        assertThat(supersedable).isEqualTo(state.isSupersedable());
+    }
+
+    @Test
+    void supersessionRetiresTheOriginalAndRecordsTheSuccessor() {
+        Allocation original = receivedAllocation();
+        Instant now = Instant.parse("2026-07-17T00:00:00Z");
+        original.transitionTo(AllocationStatus.VALIDATED, now);
+        original.transitionTo(AllocationStatus.EXECUTIONS_ALLOCATED, now);
+        original.transitionTo(AllocationStatus.COMPLETED, now);
+
+        Allocation replacement = new Allocation("ALLOC-R", AllocTransType.REPLACE, AllocationStatus.RECEIVED, 2L, now);
+        original.markSupersededBy(replacement, now);
+
+        assertThat(original.getStatus()).isEqualTo(AllocationStatus.REPLACED);
+        assertThat(original.getTransitions()).last()
+                .satisfies(t -> assertThat(t.getReason()).isEqualTo("replaced by ALLOC-R"));
+        // A superseded allocation is a dead-end: it cannot be cancelled afterwards.
+        Allocation cancel = new Allocation("ALLOC-C", AllocTransType.CANCEL, AllocationStatus.RECEIVED, 3L, now);
+        assertThatExceptionOfType(IllegalAllocationTransitionException.class)
+                .isThrownBy(() -> original.markSupersededBy(cancel, now));
     }
 
     @Test

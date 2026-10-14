@@ -1,6 +1,7 @@
 package com.tradingcapture.allocation.orchestration;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
+import com.github.tomakehurst.wiremock.stubbing.Scenario;
 import com.tradingcapture.allocation.domain.model.AllocTransType;
 import com.tradingcapture.allocation.domain.model.Allocation;
 import com.tradingcapture.allocation.domain.model.AllocationAccount;
@@ -83,10 +84,7 @@ abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport
     @BeforeEach
     void resetStubsAndData() {
         wireMock.resetAll();
-        // Machine token endpoint (client-credentials) — every downstream call carries this bearer.
-        wireMock.stubFor(post(urlEqualTo("/token")).willReturn(okJson("""
-                { "access_token": "test-token", "token_type": "Bearer", "expires_in": 300 }
-                """)));
+        stubToken();
         // FK-safe wipe: the singleton MySQL container is shared with the Phase 7 suites, whose
         // rows (e.g. allocation_misc_fees) would otherwise block deletes by referential order.
         jdbc.execute("SET FOREIGN_KEY_CHECKS = 0");
@@ -100,6 +98,13 @@ abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport
     }
 
     // --- WireMock stubs ------------------------------------------------------------------------
+
+    /** Machine token endpoint (client-credentials) — every downstream call carries this bearer. */
+    protected void stubToken() {
+        wireMock.stubFor(post(urlEqualTo("/token")).willReturn(okJson("""
+                { "access_token": "test-token", "token_type": "Bearer", "expires_in": 300 }
+                """)));
+    }
 
     protected void stubAccountsActive(String... accountIds) {
         StringBuilder results = new StringBuilder();
@@ -134,13 +139,57 @@ abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport
     }
 
     protected void stubExecutionEligible(String execId, String internalId, String qty, String isoTime) {
-        stubResolve(List.of("""
+        stubResolve(List.of(eligibleExecutionJson(execId, internalId, qty, isoTime)));
+    }
+
+    protected static String eligibleExecutionJson(String execId, String internalId, String qty, String isoTime) {
+        return """
                 { "execId": "%s", "found": true, "internalId": "%s", "orderId": "ORD-1",
                   "instrumentId": "AAPL", "accountId": "ACC-1", "side": "1",
                   "executedQuantity": %s, "allocatableQuantity": %s, "currency": "USD",
                   "tradeDate": "2026-07-17", "settleType": "0", "settleDate": "2026-07-20",
                   "transactTime": "%s", "allocationState": "UNALLOCATED", "allocationId": null,
-                  "eligible": true, "reason": "ELIGIBLE" }""".formatted(execId, internalId, qty, qty, isoTime)));
+                  "eligible": true, "reason": "ELIGIBLE" }""".formatted(execId, internalId, qty, qty, isoTime);
+    }
+
+    /** As trading-service reports an execution bound to {@code allocationId}: nothing allocatable. */
+    protected static String boundExecutionJson(String execId, String internalId, String qty, String isoTime,
+                                               String allocationId) {
+        return """
+                { "execId": "%s", "found": true, "internalId": "%s", "orderId": "ORD-1",
+                  "instrumentId": "AAPL", "accountId": "ACC-1", "side": "1",
+                  "executedQuantity": %s, "allocatableQuantity": 0.0000, "currency": "USD",
+                  "tradeDate": "2026-07-17", "settleType": "0", "settleDate": "2026-07-20",
+                  "transactTime": "%s", "allocationState": "ALLOCATED", "allocationId": "%s",
+                  "eligible": false, "reason": "ALREADY_ALLOCATED" }"""
+                .formatted(execId, internalId, qty, isoTime, allocationId);
+    }
+
+    /**
+     * Stateful trading stub: {@code execId} resolves as bound to {@code boundTo} until a RELEASE is
+     * applied, then as eligible — as the real service behaves across a Replace's release step.
+     */
+    protected void stubExecutionBoundUntilReleased(String execId, String internalId, String qty,
+                                                   String isoTime, String boundTo) {
+        String scenario = "bound-until-released-" + execId;
+        wireMock.stubFor(post(urlEqualTo("/internal/v1/executions/resolve")).inScenario(scenario)
+                .whenScenarioStateIs(Scenario.STARTED)
+                .willReturn(okJson("{ \"results\": [" + boundExecutionJson(execId, internalId, qty, isoTime, boundTo) + "] }")));
+        wireMock.stubFor(post(urlEqualTo("/internal/v1/executions/resolve")).inScenario(scenario)
+                .whenScenarioStateIs("released")
+                .willReturn(okJson("{ \"results\": [" + eligibleExecutionJson(execId, internalId, qty, isoTime) + "] }")));
+        wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state")).inScenario(scenario)
+                .whenScenarioStateIs(Scenario.STARTED)
+                .withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.containing("RELEASE"))
+                .willSetStateTo("released")
+                .willReturn(okJson("""
+                        { "allocationId": "x", "action": "RELEASE", "appliedCount": 1, "executions": [] }
+                        """)));
+        wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state")).inScenario(scenario)
+                .whenScenarioStateIs("released")
+                .willReturn(okJson("""
+                        { "allocationId": "x", "action": "ALLOCATE", "appliedCount": 1, "executions": [] }
+                        """)));
     }
 
     protected void stubResolve(List<String> resultJsons) {

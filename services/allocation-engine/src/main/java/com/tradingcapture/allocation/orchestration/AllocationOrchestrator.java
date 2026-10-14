@@ -138,20 +138,24 @@ public class AllocationOrchestrator {
 
     private OrchestrationOutcome validateStep(Snapshot a, String correlationId) {
         AllocationView view = a.view();
-        List<AccountValidationClient.AccountValidation> accountResults;
-        List<InstrumentResolutionClient.InstrumentResolution> instrumentResults;
-        List<ExecutionResolution> executionResults;
-        try {
-            accountResults = accountClient.validate(accountChecks(view));
-            instrumentResults = instrumentClient.resolve(List.of(instrumentKey(view)));
-            executionResults = tradingClient.resolveExecutions(view.execIds());
-        } catch (DependencyCallException e) {
-            return handleDependencyFailure(a, e, "validate");
+        List<AccountValidationClient.AccountValidation> accountResults = List.of();
+        List<InstrumentResolutionClient.InstrumentResolution> instrumentResults = List.of();
+        List<ExecutionResolution> executionResults = List.of();
+        // A Cancel allocates nothing — it only releases the allocation it references — so it is
+        // validated against that original alone and needs no account/instrument/execution lookups.
+        if (a.transType() != AllocTransType.CANCEL) {
+            try {
+                accountResults = accountClient.validate(accountChecks(view));
+                instrumentResults = instrumentClient.resolve(List.of(instrumentKey(view)));
+                executionResults = tradingClient.resolveExecutions(view.execIds());
+            } catch (DependencyCallException e) {
+                return handleDependencyFailure(a, e, "validate");
+            }
         }
 
         ExistingAllocationView existing = a.transType() == AllocTransType.NEW
                 ? null
-                : reader.existingOriginal(a.refAllocId()).orElse(null);
+                : reader.existingOriginal(a.refAllocId(), a.id()).orElse(null);
 
         LogicalValidationContext context = new LogicalValidationContext(view, accountResults,
                 instrumentResults, executionResults, null, existing);
@@ -202,6 +206,11 @@ public class AllocationOrchestrator {
         if (selection instanceof SelectionResult.Insufficient) {
             return tx.commitRejected(a.id(), "insufficient eligible execution quantity", "allocate");
         }
+        if (selection instanceof SelectionResult.ExcessQuantity) {
+            return tx.commitRejected(a.id(),
+                    "eligible executions exceed the allocation quantity (executions are allocated whole)",
+                    "allocate");
+        }
         if (selection instanceof SelectionResult.NoEligibleExecutions) {
             return tx.commitRejected(a.id(), "no eligible executions to allocate", "allocate");
         }
@@ -210,6 +219,13 @@ public class AllocationOrchestrator {
     }
 
     private OrchestrationOutcome releaseStep(Snapshot a, String correlationId) {
+        // Re-checked authoritatively in commitReleased; this avoids releasing for an original that a
+        // concurrent Replace/Cancel already retired since this instruction validated.
+        ExistingAllocationView original = reader.existingOriginal(a.refAllocId(), a.id()).orElse(null);
+        if (original == null || !original.status().isSupersedable()) {
+            return tx.commitRejected(a.id(), "original allocation " + a.refAllocId() + " is no longer live"
+                    + (original == null ? "" : " (" + original.status() + ")"), "release");
+        }
         try {
             tradingClient.release(a.refAllocId(), null);
         } catch (DependencyCallException e) {

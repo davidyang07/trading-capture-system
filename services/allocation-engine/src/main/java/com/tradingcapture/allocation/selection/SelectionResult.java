@@ -6,17 +6,18 @@ import java.util.List;
 
 /**
  * The typed outcome of deterministic execution selection. Partial allocation is not permitted for an
- * allocation, so insufficient eligible quantity is a typed {@link Insufficient} failure, never a
- * partial success. Results are independent of JPA/HTTP types.
+ * allocation and executions are consumed whole, so eligible quantity below or above the request is a
+ * typed {@link Insufficient} / {@link ExcessQuantity} failure, never a partial success. Results are
+ * independent of JPA/HTTP types.
  */
 public sealed interface SelectionResult
         permits SelectionResult.Complete, SelectionResult.Insufficient,
-        SelectionResult.NoEligibleExecutions, SelectionResult.InvalidCandidate,
-        SelectionResult.Invariant {
+        SelectionResult.ExcessQuantity, SelectionResult.NoEligibleExecutions,
+        SelectionResult.InvalidCandidate, SelectionResult.Invariant {
 
     boolean isComplete();
 
-    /** A full selection whose quantities sum exactly to the requested quantity. */
+    /** A full selection of whole executions whose quantities sum exactly to the requested quantity. */
     record Complete(List<SelectedExecution> selections, BigDecimal totalSelected) implements SelectionResult {
         public Complete {
             selections = List.copyOf(selections);
@@ -30,6 +31,17 @@ public sealed interface SelectionResult
 
     /** Eligible executions exist but their aggregate quantity is below the request (no partial fill). */
     record Insufficient(BigDecimal availableQuantity, BigDecimal requestedQuantity) implements SelectionResult {
+        @Override
+        public boolean isComplete() {
+            return false;
+        }
+    }
+
+    /**
+     * Eligible executions exceed the request. Executions are consumed whole, so this could only be
+     * met by splitting one — which would bind (and strand) its remainder.
+     */
+    record ExcessQuantity(BigDecimal availableQuantity, BigDecimal requestedQuantity) implements SelectionResult {
         @Override
         public boolean isComplete() {
             return false;

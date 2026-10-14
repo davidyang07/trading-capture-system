@@ -207,6 +207,15 @@ class LogicalAllocationValidatorTest {
                 .contains(LogicalValidationCode.INSUFFICIENT_EXECUTION_QUANTITY);
     }
 
+    @Test
+    void executionsExceedingTheAllocationQuantityAreRejectedNotSplit() {
+        // Trading binds whole executions; allocating 100 of a 150 fill would bind all 150.
+        LogicalValidationContext ctx = withExecution(validNew(),
+                execution("E1", "AAPL", "1", "150.0000", true, "ELIGIBLE", null));
+        assertThat(codes(validator.validate(ctx)))
+                .containsExactly(LogicalValidationCode.EXCESS_EXECUTION_QUANTITY);
+    }
+
     // --- transaction-type rules ----------------------------------------------------------------
 
     @Test
@@ -244,6 +253,57 @@ class LogicalAllocationValidatorTest {
         LogicalValidationContext valid = cancel(new ExistingAllocationView("ORIG", AllocTransType.NEW,
                 AllocationStatus.COMPLETED, "AAPL", List.of("ACC-1")));
         assertThat(validator.validate(valid).isValid()).isTrue();
+    }
+
+    @Test
+    void replaceMayRelistTheOriginalsExecutionsCountedAtTheirFullQuantity() {
+        // Still bound to ORIG, so trading reports 0 allocatable — the release step frees all 100.
+        LogicalValidationContext ctx = withExecution(replace(live("ORIG", AllocationStatus.COMPLETED)),
+                boundTo("E1", "ORIG", "100.0000"));
+        assertThat(validator.validate(ctx).isValid()).isTrue();
+
+        LogicalValidationContext tooMuch = withExecution(withQuantity(
+                replace(live("ORIG", AllocationStatus.COMPLETED)), new BigDecimal("60.0000")),
+                boundTo("E1", "ORIG", "100.0000"));
+        assertThat(codes(validator.validate(tooMuch))).contains(LogicalValidationCode.EXCESS_EXECUTION_QUANTITY);
+    }
+
+    @Test
+    void replaceCannotTakeExecutionsBoundToAnotherAllocation() {
+        LogicalValidationContext ctx = withExecution(replace(live("ORIG", AllocationStatus.COMPLETED)),
+                boundTo("E1", "OTHER", "100.0000"));
+        assertThat(codes(validator.validate(ctx))).contains(LogicalValidationCode.EXECUTION_ALREADY_ALLOCATED);
+    }
+
+    @Test
+    void cancelIsValidatedAgainstItsOriginalOnlyEvenWhenItRelistsTheOriginalsExecutions() {
+        // The orchestrator makes no account/instrument/execution lookups for a Cancel.
+        LogicalValidationContext base = cancel(live("ORIG", AllocationStatus.COMPLETED));
+        LogicalValidationContext ctx = new LogicalValidationContext(base.allocation(), List.of(), List.of(),
+                List.of(boundTo("E1", "ORIG", "100.0000")), null, base.existingAllocation());
+        assertThat(validator.validate(ctx).isValid()).isTrue();
+    }
+
+    @Test
+    void anAlreadyReplacedOrCancelledOriginalCannotBeReplacedOrCancelledAgain() {
+        for (AllocationStatus superseded : List.of(AllocationStatus.REPLACED, AllocationStatus.CANCELLED)) {
+            assertThat(codes(validator.validate(replace(live("ORIG", superseded)))))
+                    .contains(LogicalValidationCode.REPLACE_ORIGINAL_INELIGIBLE);
+            assertThat(codes(validator.validate(cancel(live("ORIG", superseded)))))
+                    .contains(LogicalValidationCode.CANCEL_ORIGINAL_INELIGIBLE);
+        }
+    }
+
+    private static ExistingAllocationView live(String allocId, AllocationStatus status) {
+        return new ExistingAllocationView(allocId, AllocTransType.NEW, status, "AAPL", List.of("ACC-1"));
+    }
+
+    /** An execution currently bound to {@code allocationId}: trading reports nothing allocatable. */
+    private static ExecutionResolution boundTo(String execId, String allocationId, String executed) {
+        return new ExecutionResolution(execId, true, "exec_" + execId, "ORD-1", "AAPL", "ACC-1", "1",
+                new BigDecimal(executed), new BigDecimal("0.0000"), "USD",
+                LocalDate.parse("2026-07-17"), "0", LocalDate.parse("2026-07-20"),
+                Instant.parse("2026-07-17T14:00:00Z"), "ALLOCATED", allocationId, false, "ALREADY_ALLOCATED");
     }
 
     @Test

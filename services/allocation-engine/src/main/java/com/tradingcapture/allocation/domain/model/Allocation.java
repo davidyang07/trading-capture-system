@@ -316,6 +316,24 @@ public class Allocation {
         transitionTo(AllocationStatus.COMPLETED, now);
     }
 
+    /**
+     * Retire this live allocation because {@code successor} (a Replace or Cancel referencing it)
+     * released its executions: {@code -> REPLACED} or {@code -> CANCELLED}. Called in the
+     * successor's release transaction, so supersession and the release commit together.
+     */
+    public void markSupersededBy(Allocation successor, Instant now) {
+        AllocationStatus next = successor.getAllocTransType() == AllocTransType.CANCEL
+                ? AllocationStatus.CANCELLED
+                : AllocationStatus.REPLACED;
+        String verb = next == AllocationStatus.CANCELLED ? "cancelled by " : "replaced by ";
+        transitionTo(next, verb + successor.getAllocId(), now);
+        this.nextAttemptAt = null;
+        if (this.completedAt == null) {
+            this.completedAt = now;
+        }
+        releaseClaim(now);
+    }
+
     // --- orchestration claim (durable visibility alongside the row lock, ADR-0006 recovery) ----
 
     public void claim(String worker, Instant now) {

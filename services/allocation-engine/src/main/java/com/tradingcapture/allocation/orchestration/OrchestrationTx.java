@@ -1,6 +1,5 @@
 package com.tradingcapture.allocation.orchestration;
 
-import com.tradingcapture.allocation.domain.model.AllocTransType;
 import com.tradingcapture.allocation.domain.model.Allocation;
 import com.tradingcapture.allocation.domain.model.AllocationStatus;
 import com.tradingcapture.allocation.domain.model.OrchestrationFailureCategory;
@@ -76,15 +75,27 @@ public class OrchestrationTx {
         return step("allocate", OrchestrationOutcome.ADVANCED);
     }
 
+    /**
+     * Commits a Replace/Cancel's release and retires the original it references
+     * ({@code -> REPLACED / CANCELLED}) in one transaction. If the original is no longer live — a
+     * concurrent Replace/Cancel of it committed first — this instruction is rejected instead; the
+     * original's {@code @Version} makes two successors racing here fail one of them.
+     */
     @Transactional
     public OrchestrationOutcome commitReleased(Long id, String correlationId) {
         Allocation a = allocations.findById(id).orElseThrow();
         if (a.getStatus() != AllocationStatus.VALIDATED) {
             return OrchestrationOutcome.SKIPPED;
         }
-        Optional<Allocation> original = allocations.findByAllocIdAndAllocTransType(
-                a.getRefAllocId(), AllocTransType.NEW);
-        List<String> releasedIds = original.map(o -> o.releaseAllAssignments(now())).orElse(List.of());
+        Optional<Allocation> original = allocations.findReferencedOriginal(a.getRefAllocId(), a.getId())
+                .filter(o -> o.getStatus().isSupersedable());
+        if (original.isEmpty()) {
+            a.reject("original allocation " + a.getRefAllocId() + " is no longer live", now());
+            a.releaseClaim(now());
+            return step("release", OrchestrationOutcome.REJECTED);
+        }
+        List<String> releasedIds = original.get().releaseAllAssignments(now());
+        original.get().markSupersededBy(a, now());
         a.transitionTo(AllocationStatus.EXECUTIONS_RELEASED, "executions released", now());
         a.clearTransientFailure(now());
         var event = events.executionsReleased(a, a.getRefAllocId(), releasedIds, correlationId);

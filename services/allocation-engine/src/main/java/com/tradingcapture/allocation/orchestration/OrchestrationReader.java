@@ -62,9 +62,10 @@ public class OrchestrationReader {
         });
     }
 
+    /** The allocation {@code refAllocId} refers to (New or Replace, live preferred); see the repository. */
     @Transactional(readOnly = true)
-    public Optional<ExistingAllocationView> existingOriginal(String refAllocId) {
-        return allocations.findByAllocIdAndAllocTransType(refAllocId, AllocTransType.NEW).map(orig -> {
+    public Optional<ExistingAllocationView> existingOriginal(String refAllocId, Long referencingId) {
+        return allocations.findReferencedOriginal(refAllocId, referencingId).map(orig -> {
             List<String> accountIds = orig.getAccounts().stream()
                     .map(AllocationAccount::getAllocAccount).toList();
             return new ExistingAllocationView(orig.getAllocId(), orig.getAllocTransType(),

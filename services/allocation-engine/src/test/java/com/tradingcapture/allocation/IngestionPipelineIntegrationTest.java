@@ -247,6 +247,27 @@ class IngestionPipelineIntegrationTest extends AllocationIntegrationTestSupport 
     }
 
     @Test
+    void newAllocationWithoutSettlDateIsInvalidAtIntakeAndNeverReachesOrchestration() {
+        String allocId = "ALLOC-NOSD-" + UUID.randomUUID().toString().substring(0, 8);
+        String wire = FixTestMessages.withoutSettlDate(allocId, '0');
+
+        send(allocId, wire, "corr-nosd-" + allocId);
+
+        RawMessage raw = awaitTerminalRawFor(wire);
+        assertThat(raw.getStatus()).isEqualTo(RawMessageStatus.INVALID);
+        // INVALID is terminal: orchestration never claims it, so no execution is ever bound.
+        Allocation allocation = allocations
+                .findByAllocIdAndAllocTransType(allocId, AllocTransType.NEW).orElseThrow();
+        assertThat(allocation.getStatus()).isEqualTo(AllocationStatus.INVALID);
+        List<ValidationError> stored = validationErrors.findByRawMessageIdOrderByIdAsc(raw.getId());
+        assertThat(stored).singleElement()
+                .satisfies(error -> assertThat(error.getErrorCode())
+                        .isEqualTo(ValidationErrorCode.MISSING_REQUIRED_FIELD));
+
+        awaitOutboxFor(allocId, "AllocationRejected");
+    }
+
+    @Test
     void malformedPayloadTerminatesAsParseFailedWithExceptionEvent() {
         String wire = FixTestMessages.malformedFix();
 

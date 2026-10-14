@@ -89,6 +89,24 @@ public final class FixTestMessages {
         return message.toString();
     }
 
+    /**
+     * A New/Replace/Cancel without SettlDate (64): FIX-optional, but New and Replace must carry it
+     * because they complete by requesting settlement.
+     */
+    public static String withoutSettlDate(String allocId, char transType) {
+        AllocationInstruction message = baseInstruction(allocId, transType);
+        message.removeField(SettlDate.FIELD);
+        if (transType != '0') {
+            message.setField(new RefAllocID("ALLOC-0001"));
+        }
+        message.addGroup(orderGroup("ORD-1", "EXCH-ORD-1", 100));
+        if (transType != '2') {
+            message.addGroup(execGroup("EXEC-1", 100, 101.25));
+        }
+        message.addGroup(accountGroup("ACC-INV-1", 100));
+        return message.toString();
+    }
+
     /** A valid Cancel referencing a prior allocation. */
     public static String validCancel(String allocId, String refAllocId) {
         AllocationInstruction message = baseInstruction(allocId, '2');
