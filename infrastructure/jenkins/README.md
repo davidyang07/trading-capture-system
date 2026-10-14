@@ -29,8 +29,10 @@ Declarative pipeline at [`Jenkinsfile`](./Jenkinsfile). Configure a Jenkins Pipe
 - **No embedded credentials.** Secrets come only from the Jenkins credentials store
   (`registry-credentials`, `kubeconfig`) via `withCredentials`. Registry/host are parameters.
 - **Deploy runs the scanned artifact.** The `Deploy` stage asserts a real `tcs-secrets` already
-  exists (never applies the `examples/` placeholder), requires `PUSH_IMAGES`, applies the manifests
-  non-recursively, then `kubectl set image` to the exact `RESOLVED_TAG` it built + scanned + pushed.
+  exists (never applies the `examples/` placeholder), requires `PUSH_IMAGES`, renders the manifests
+  (non-recursively) with the exact `RESOLVED_TAG` it built + scanned + pushed, and applies them in a
+  single step — so no Deployment ever rolls to the manifests' default image pin, and
+  `kubectl rollout undo` returns to the previous release.
 - **Parameters are validated before shell use.** Image prefixes and tags reject whitespace and
   shell metacharacters; registry login targets the registry host rather than the repository path.
 - **Pinned CI tool images.** gitleaks / trivy are pinned to fixed versions (`GITLEAKS_IMAGE`,

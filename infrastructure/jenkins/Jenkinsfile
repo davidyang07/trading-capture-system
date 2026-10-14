@@ -183,14 +183,23 @@ pipeline {
             // never apply the placeholder example Secret from CI — it lives under examples/ and the
             // non-recursive apply below skips it; this assertion fails fast if it is missing.
             sh 'kubectl -n tcs get secret tcs-secrets >/dev/null'
-            // Apply config + workloads (non-recursive: the examples/ placeholder Secret is skipped).
-            sh 'kubectl -n tcs apply -f infrastructure/kubernetes/'
-            // Roll out the exact tag this pipeline built + scanned + pushed (the manifests carry a
-            // default pin; set the image so build->scan->deploy stays a single immutable artifact).
-            def deployments = ['trading-service', 'account-service', 'enrichment-service', 'allocation-engine', 'admin-web']
-            deployments.each { name ->
-              sh "kubectl -n tcs set image deploy/${name} ${name}=${env.IMAGE_PREFIX}/${name}:${env.RESOLVED_TAG}"
-            }
+            // Apply config + workloads rendered with the exact tag this pipeline built + scanned +
+            // pushed, in ONE apply (non-recursive: the examples/ placeholder Secret is skipped).
+            // Applying the committed manifests and then `kubectl set image` would first roll every
+            // Deployment back to the manifests' default pin — an image this pipeline never built or
+            // scanned — and leave that pin as the `rollout undo` target. The grep fails the stage if
+            // any workload would not deploy the resolved image.
+            sh '''
+              set -eu
+              rendered="$(mktemp -d)"
+              trap 'rm -rf "$rendered"' EXIT
+              cp infrastructure/kubernetes/*.yaml "$rendered"/
+              for name in trading-service account-service enrichment-service allocation-engine admin-web; do
+                sed -i -E "s|^([[:space:]]*image:[[:space:]]*)[^[:space:]]+/${name}:[^[:space:]]+|\\1${IMAGE_PREFIX}/${name}:${RESOLVED_TAG}|" "$rendered"/*.yaml
+                grep -qF "image: ${IMAGE_PREFIX}/${name}:${RESOLVED_TAG}" "$rendered"/*.yaml
+              done
+              kubectl -n tcs apply -f "$rendered"/
+            '''
             // Wait in dependency order. Rollback: kubectl -n tcs rollout undo deploy/<name>
             // (see infrastructure/kubernetes/README.md).
             ['account-service', 'enrichment-service', 'trading-service', 'allocation-engine', 'admin-web'].each { name ->

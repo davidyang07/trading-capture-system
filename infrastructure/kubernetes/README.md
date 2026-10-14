@@ -59,8 +59,9 @@ kubectl -n tcs rollout status deploy/admin-web --timeout=180s
 
 A local `kind` smoke test is optional (see the root README). The CI pipeline
 (`infrastructure/jenkins/Jenkinsfile`) runs the same flow in its gated, manual-approval `Deploy`
-stage: it asserts `tcs-secrets` already exists, applies the manifests (skipping `examples/`), then
-`kubectl set image` to the exact tag it built and scanned.
+stage: it asserts `tcs-secrets` already exists, then applies the manifests (skipping `examples/`)
+with every workload image rewritten to the exact tag it built and scanned. The committed `image:`
+pins are only defaults for a manual apply; CI never deploys them.
 
 ## Rollback and recovery
 
