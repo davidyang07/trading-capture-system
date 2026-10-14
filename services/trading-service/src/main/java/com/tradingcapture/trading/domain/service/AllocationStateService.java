@@ -34,6 +34,9 @@ import java.util.Set;
  *       without IDs it releases everything bound to it. Releasing something not (any
  *       longer) bound is a no-op success.</li>
  *   <li>Rows carry {@code @Version}, so concurrent state flips cannot silently collide.</li>
+ *   <li>Targets are row-locked before the eligibility checks, and correction/cancellation locks
+ *       its target the same way, so an execution can never end up both ALLOCATED and
+ *       superseded/cancelled by a racing amendment.</li>
  * </ul>
  */
 @Service
@@ -114,8 +117,12 @@ public class AllocationStateService {
         return new Result(command.allocationId(), command.action(), applied, targets);
     }
 
+    /**
+     * Loads the targets under row locks before any eligibility check, so an ALLOCATE cannot race a
+     * concurrent correction/cancellation of the same execution (that path locks the target too).
+     */
     private List<Execution> loadAll(List<String> internalIds) {
-        List<Execution> found = executions.findAllById(internalIds);
+        List<Execution> found = executions.findAllByInternalIdInForUpdate(internalIds);
         if (found.size() != new HashSet<>(internalIds).size()) {
             List<String> missing = new ArrayList<>(internalIds);
             found.forEach(execution -> missing.remove(execution.getInternalId()));
@@ -124,6 +131,7 @@ public class AllocationStateService {
         return found;
     }
 
+    /** Runs after {@link #loadAll}: the row locks guarantee any racing amendment has committed. */
     private Set<String> supersededIds(List<String> internalIds) {
         Set<String> superseded = new HashSet<>();
         for (Execution amendment : executions.findByExecRefIdIn(internalIds)) {

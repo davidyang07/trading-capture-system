@@ -91,7 +91,7 @@ class ExecutionResolutionIntegrationTest extends IntegrationTestSupport {
                 .andExpect(jsonPath("$.results[0].eligible").value(false))
                 .andExpect(jsonPath("$.results[0].reason").value("ALREADY_ALLOCATED"))
                 .andExpect(jsonPath("$.results[0].allocationId").value("ALLOC-RES-1"))
-                .andExpect(jsonPath("$.results[0].allocatableQuantity").value(0));
+                .andExpect(jsonPath("$.results[0].allocatableQuantity").value("0.0000"));
     }
 
     @Test

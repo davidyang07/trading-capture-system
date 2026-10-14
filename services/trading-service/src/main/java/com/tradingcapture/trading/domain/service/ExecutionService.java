@@ -181,11 +181,14 @@ public class ExecutionService {
     }
 
     /**
-     * Loads the amendment target and enforces chain eligibility. Missing targets and targets
-     * on another investor's order surface identically as 404.
+     * Loads the amendment target under a row lock and enforces chain eligibility. Missing targets
+     * and targets on another investor's order surface identically as 404.
      */
     private Execution loadAmendableTarget(AccessContext ctx, String targetInternalId) {
-        Execution target = executions.findById(targetInternalId)
+        // Locked so a concurrent ALLOCATE of the same execution cannot pass its eligibility check
+        // against our not-yet-committed amendment (see AllocationStateService).
+        Execution target = executions.findAllByInternalIdInForUpdate(List.of(targetInternalId)).stream()
+                .findFirst()
                 .orElseThrow(() -> ResourceNotFoundException.execution(targetInternalId));
         ctx.requireVisible(target.getOrder());
         if (target.isCancellation()) {

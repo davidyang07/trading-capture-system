@@ -54,7 +54,7 @@ class AllocationStateServiceTest {
 
     @Test
     void allocateBindsExecutionAndCountsTransition() {
-        when(executions.findAllById(List.of("exec_t1"))).thenReturn(List.of(execution));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(execution));
 
         AllocationStateService.Result result = service.apply(allocate("ALLOC-1", "exec_t1"));
 
@@ -67,7 +67,7 @@ class AllocationStateServiceTest {
     @Test
     void allocateReplayIsIdempotentNoOp() {
         execution.allocate("ALLOC-1", TradingFixtures.FIXED_NOW.minusSeconds(60));
-        when(executions.findAllById(List.of("exec_t1"))).thenReturn(List.of(execution));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(execution));
 
         AllocationStateService.Result result = service.apply(allocate("ALLOC-1", "exec_t1"));
 
@@ -78,7 +78,7 @@ class AllocationStateServiceTest {
     @Test
     void allocateToDifferentAllocationConflicts() {
         execution.allocate("ALLOC-1", TradingFixtures.FIXED_NOW.minusSeconds(60));
-        when(executions.findAllById(List.of("exec_t1"))).thenReturn(List.of(execution));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(execution));
 
         assertThatThrownBy(() -> service.apply(allocate("ALLOC-2", "exec_t1")))
                 .isInstanceOfSatisfying(BusinessRuleException.class,
@@ -89,7 +89,7 @@ class AllocationStateServiceTest {
     void allocateRejectsCancelledExecution() {
         Execution cancellation = TradingFixtures.amendment(order, "exec_x1",
                 ExecutionType.TRADE_CANCEL, execution, "0", null);
-        when(executions.findAllById(List.of("exec_x1"))).thenReturn(List.of(cancellation));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_x1"))).thenReturn(List.of(cancellation));
 
         assertThatThrownBy(() -> service.apply(allocate("ALLOC-1", "exec_x1")))
                 .isInstanceOfSatisfying(BusinessRuleException.class,
@@ -100,7 +100,7 @@ class AllocationStateServiceTest {
     void allocateRejectsSupersededExecution() {
         Execution correction = TradingFixtures.amendment(order, "exec_c1",
                 ExecutionType.TRADE_CORRECT, execution, "50", "10.50");
-        when(executions.findAllById(List.of("exec_t1"))).thenReturn(List.of(execution));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(execution));
         when(executions.findByExecRefIdIn(List.of("exec_t1"))).thenReturn(List.of(correction));
 
         assertThatThrownBy(() -> service.apply(allocate("ALLOC-1", "exec_t1")))
@@ -110,7 +110,7 @@ class AllocationStateServiceTest {
 
     @Test
     void allocateFailsWhenAnyIdIsUnknown() {
-        when(executions.findAllById(List.of("exec_t1", "exec_missing"))).thenReturn(List.of(execution));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1", "exec_missing"))).thenReturn(List.of(execution));
 
         assertThatThrownBy(() -> service.apply(allocate("ALLOC-1", "exec_t1", "exec_missing")))
                 .isInstanceOf(ResourceNotFoundException.class)
@@ -120,7 +120,7 @@ class AllocationStateServiceTest {
     @Test
     void releaseWithExplicitIdsUnbindsMatchingAllocation() {
         execution.allocate("ALLOC-1", TradingFixtures.FIXED_NOW.minusSeconds(60));
-        when(executions.findAllById(List.of("exec_t1"))).thenReturn(List.of(execution));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(execution));
 
         AllocationStateService.Result result = service.apply(new AllocationStateCommand(
                 "ALLOC-1", AllocationStateCommand.Action.RELEASE, List.of("exec_t1")));
@@ -132,7 +132,7 @@ class AllocationStateServiceTest {
 
     @Test
     void releaseOfUnallocatedExecutionIsIdempotentNoOp() {
-        when(executions.findAllById(List.of("exec_t1"))).thenReturn(List.of(execution));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(execution));
 
         AllocationStateService.Result result = service.apply(new AllocationStateCommand(
                 "ALLOC-1", AllocationStateCommand.Action.RELEASE, List.of("exec_t1")));
@@ -143,7 +143,7 @@ class AllocationStateServiceTest {
     @Test
     void releaseConflictsWhenBoundToDifferentAllocation() {
         execution.allocate("ALLOC-OTHER", TradingFixtures.FIXED_NOW.minusSeconds(60));
-        when(executions.findAllById(List.of("exec_t1"))).thenReturn(List.of(execution));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(execution));
 
         assertThatThrownBy(() -> service.apply(new AllocationStateCommand(
                 "ALLOC-1", AllocationStateCommand.Action.RELEASE, List.of("exec_t1"))))

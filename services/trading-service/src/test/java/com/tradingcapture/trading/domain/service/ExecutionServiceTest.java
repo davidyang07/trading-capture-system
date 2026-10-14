@@ -175,7 +175,7 @@ class ExecutionServiceTest {
         Order order = TradingFixtures.order("ORD-1", "investor1", "100");
         Execution target = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
         order.applyFillState(new BigDecimal("60"), TradingFixtures.FIXED_NOW);
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(false);
         when(executions.findByOrderOrderIdOrderByCreatedAtAscInternalIdAsc("ORD-1")).thenReturn(List.of(target));
 
@@ -201,7 +201,7 @@ class ExecutionServiceTest {
         Execution firstCorrection = TradingFixtures.amendment(order, "exec_c1",
                 ExecutionType.TRADE_CORRECT, root, "50", "10.50");
         order.applyFillState(new BigDecimal("50"), TradingFixtures.FIXED_NOW);
-        when(executions.findById("exec_c1")).thenReturn(Optional.of(firstCorrection));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_c1"))).thenReturn(List.of(firstCorrection));
         when(executions.existsByExecRefId("exec_c1")).thenReturn(false);
         when(executions.findByOrderOrderIdOrderByCreatedAtAscInternalIdAsc("ORD-1"))
                 .thenReturn(List.of(root, firstCorrection));
@@ -218,7 +218,7 @@ class ExecutionServiceTest {
     void correctRejectsSupersededTarget() {
         Order order = TradingFixtures.order("ORD-1", "investor1", "100");
         Execution target = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(true);
 
         assertThatThrownBy(() -> service.correct(TradingFixtures.admin(), "exec_t1",
@@ -233,7 +233,7 @@ class ExecutionServiceTest {
         Execution trade = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
         Execution cancellation = TradingFixtures.amendment(order, "exec_x1",
                 ExecutionType.TRADE_CANCEL, trade, "0", null);
-        when(executions.findById("exec_x1")).thenReturn(Optional.of(cancellation));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_x1"))).thenReturn(List.of(cancellation));
 
         assertThatThrownBy(() -> service.correct(TradingFixtures.admin(), "exec_x1",
                 new ExecutionCommands.Correct(null, BigDecimal.ONE, BigDecimal.ONE, null, null)))
@@ -246,7 +246,7 @@ class ExecutionServiceTest {
         Order order = TradingFixtures.order("ORD-1", "investor1", "100");
         Execution target = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
         target.allocate("ALLOC-1", TradingFixtures.FIXED_NOW);
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(false);
 
         assertThatThrownBy(() -> service.correct(TradingFixtures.admin(), "exec_t1",
@@ -260,7 +260,7 @@ class ExecutionServiceTest {
         Order order = TradingFixtures.order("ORD-1", "investor1", "100");
         Execution target = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
         order.applyFillState(new BigDecimal("60"), TradingFixtures.FIXED_NOW);
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(false);
 
         assertThatThrownBy(() -> service.correct(TradingFixtures.admin(), "exec_t1",
@@ -277,7 +277,7 @@ class ExecutionServiceTest {
                 "REGULATORY", new BigDecimal("0.0400"), "USD", MiscFeeBasis.ABSOLUTE,
                 TradingFixtures.FIXED_NOW));
         order.applyFillState(new BigDecimal("60"), TradingFixtures.FIXED_NOW);
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(false);
         when(executions.findByOrderOrderIdOrderByCreatedAtAscInternalIdAsc("ORD-1")).thenReturn(List.of(target));
 
@@ -295,7 +295,7 @@ class ExecutionServiceTest {
                 "REGULATORY", new BigDecimal("0.0400"), "USD", MiscFeeBasis.ABSOLUTE,
                 TradingFixtures.FIXED_NOW));
         order.applyFillState(new BigDecimal("60"), TradingFixtures.FIXED_NOW);
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(false);
         when(executions.findByOrderOrderIdOrderByCreatedAtAscInternalIdAsc("ORD-1")).thenReturn(List.of(target));
 
@@ -311,7 +311,7 @@ class ExecutionServiceTest {
         Order order = TradingFixtures.order("ORD-1", "investor1", "100");
         Execution target = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
         order.applyFillState(new BigDecimal("60"), TradingFixtures.FIXED_NOW);
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(false);
         when(executions.findByOrderOrderIdOrderByCreatedAtAscInternalIdAsc("ORD-1")).thenReturn(List.of(target));
 
@@ -335,7 +335,7 @@ class ExecutionServiceTest {
         Execution trade = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
         Execution cancellation = TradingFixtures.amendment(order, "exec_x1",
                 ExecutionType.TRADE_CANCEL, trade, "0", null);
-        when(executions.findById("exec_x1")).thenReturn(Optional.of(cancellation));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_x1"))).thenReturn(List.of(cancellation));
 
         assertThatThrownBy(() -> service.cancel(TradingFixtures.admin(), "exec_x1",
                 new ExecutionCommands.Cancel(null, null)))
@@ -347,7 +347,7 @@ class ExecutionServiceTest {
     void cancelRejectsSupersededTarget() {
         Order order = TradingFixtures.order("ORD-1", "investor1", "100");
         Execution target = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(true);
 
         assertThatThrownBy(() -> service.cancel(TradingFixtures.admin(), "exec_t1",
@@ -361,7 +361,7 @@ class ExecutionServiceTest {
         Order order = TradingFixtures.order("ORD-1", "investor1", "100");
         Execution target = TradingFixtures.trade(order, "exec_t1", "60", "10.00");
         target.allocate("ALLOC-1", TradingFixtures.FIXED_NOW);
-        when(executions.findById("exec_t1")).thenReturn(Optional.of(target));
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_t1"))).thenReturn(List.of(target));
         when(executions.existsByExecRefId("exec_t1")).thenReturn(false);
 
         assertThatThrownBy(() -> service.cancel(TradingFixtures.admin(), "exec_t1",
@@ -372,7 +372,7 @@ class ExecutionServiceTest {
 
     @Test
     void amendmentOfMissingTargetIsNotFound() {
-        when(executions.findById("exec_missing")).thenReturn(Optional.empty());
+        when(executions.findAllByInternalIdInForUpdate(List.of("exec_missing"))).thenReturn(List.of());
 
         assertThatThrownBy(() -> service.cancel(TradingFixtures.admin(), "exec_missing",
                 new ExecutionCommands.Cancel(null, null)))
