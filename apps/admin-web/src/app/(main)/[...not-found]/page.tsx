@@ -17,7 +17,6 @@ export default function NotFound() {
           style={{ marginTop: "5rem" }}
           rounded
           label="Go Home"
-          severity="help"
           onClick={() => {
             router.push("/dashboard");
           }}

@@ -1,3 +1,4 @@
+// Top bar: 64px, white, hairline bottom (DESIGN.md › Navigation).
 .layout-top-bar {
   width: 100%;
   height: var(--header-height);
@@ -5,12 +6,12 @@
   top: 0;
   left: 0;
   z-index: 1002;
-  border-bottom: 1px solid var(--color-grey-1);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0px 25px;
-  background-color: var(--color-grey-0);
+  padding: 0 32px 0 24px;
+  background-color: var(--tcs-canvas);
+  border-bottom: 1px solid var(--tcs-hairline);
 }
 
 .layout-topbar-logo {
@@ -22,38 +23,44 @@
 .layout-topbar-desc {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  color: var(--color-black);
+  gap: 2px;
 }
 
 .layout-topbar-title {
-  font-size: var(--font-size-base);
-  font-weight: bold;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--tcs-ink);
+  letter-spacing: -0.1px;
 }
 
 .layout-topbar-subtitle {
   font-size: var(--font-size-xs);
-
-  span:nth-child(2) {
-    color: var(--main-color);
-    font-weight: 700;
-  }
+  color: var(--tcs-ink-mute);
 }
 
 .layout-topbar-menu {
-  height: 28px;
   display: flex;
-  justify-content: center;
   align-items: center;
-  font-size: var(--font-size-sm);
+  gap: 12px;
+  font-size: var(--font-size-md);
+  color: var(--tcs-ink);
 
-  img {
-    margin-right: 8px;
+  .avatar-img {
+    border-radius: var(--tcs-radius-pill);
   }
+
+  .layout-topbar-user {
+    font-weight: 500;
+  }
+
   button {
-    margin-left: 31px;
-    height: 28px;
+    margin-left: 8px;
   }
+}
+
+.layout-topbar-role {
+  color: var(--tcs-ink-mute);
+  font-weight: 400;
 }
 
 @media (max-width: 640px) {
@@ -62,12 +69,7 @@
   }
 
   .layout-topbar-logo {
-    gap: 6px;
-
-    .logo-img {
-      width: 40px;
-      height: 40px;
-    }
+    gap: 8px;
   }
 
   .layout-topbar-subtitle,

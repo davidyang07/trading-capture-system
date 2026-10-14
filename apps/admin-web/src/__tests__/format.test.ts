@@ -1,4 +1,9 @@
-import { formatDecimal, formatMoney, humanizeEnum } from "@/lib/format";
+import {
+  formatDecimal,
+  formatMoney,
+  humanizeEnum,
+  formatQuantity,
+} from "@/lib/format";
 
 describe("formatDecimal", () => {
   it("preserves exact decimal strings without float math", () => {
@@ -37,5 +42,14 @@ describe("humanizeEnum", () => {
   it("title-cases underscored enums", () => {
     expect(humanizeEnum("PARTIALLY_FILLED")).toBe("Partially Filled");
     expect(humanizeEnum("TRADE_CANCEL")).toBe("Trade Cancel");
+  });
+});
+
+describe("formatQuantity", () => {
+  it("groups digits at the API's scale and never adds a currency", () => {
+    expect(formatQuantity("400.0000")).toBe("400.0000");
+    expect(formatQuantity("1234567.5")).toBe("1,234,567.5");
+    expect(formatQuantity("100")).toBe("100");
+    expect(formatQuantity(null)).toBe("—");
   });
 });

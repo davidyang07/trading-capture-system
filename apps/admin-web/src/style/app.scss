@@ -1,15 +1,15 @@
-// Phase 10 application styles: shell, pages, states, forms, and status presentation.
-// Reuses the design tokens declared in global.scss (:root custom properties).
+// Application styles: shell pieces, pages, states, forms and status presentation, following
+// apps/admin-web/DESIGN.md. Tokens come from global.scss (--tcs-*).
 
 .skip-link {
   position: absolute;
   left: -999px;
   top: 0;
   z-index: 1000;
-  background: var(--main-color);
-  color: #fff;
+  background: var(--tcs-primary);
+  color: var(--tcs-on-primary);
   padding: 10px 16px;
-  border-radius: 0 0 6px 0;
+  border-radius: 0 0 var(--tcs-radius-md) 0;
 
   &:focus {
     left: 0;
@@ -33,9 +33,11 @@ a:focus-visible,
 button:focus-visible,
 [tabindex]:focus-visible,
 .p-button:focus-visible {
-  outline: 3px solid var(--nav-active-color);
+  outline: 2px solid var(--tcs-primary);
   outline-offset: 2px;
 }
+
+// --- Page header: breadcrumb, title (26/300), description, actions on the right ---------------------
 
 .page-header {
   display: flex;
@@ -43,39 +45,51 @@ button:focus-visible,
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 18px;
+  margin-bottom: 24px;
 
   .page-title {
-    font-size: 22px;
-    font-weight: 600;
-    color: var(--color-grey-5);
+    font-size: 26px;
+    font-weight: 300;
+    line-height: 1.15;
+    letter-spacing: -0.26px;
+    color: var(--tcs-ink);
+    word-break: break-word;
   }
 
   .page-desc {
-    color: var(--color-grey-9);
-    font-size: var(--font-size-md);
-    margin-top: 4px;
+    color: var(--tcs-ink-mute);
+    font-size: var(--font-size-sm);
+    margin-top: 6px;
+  }
+
+  .page-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
   }
 }
 
+// --- Panels ----------------------------------------------------------------------------------------
+
 .panel {
-  background: var(--color-white);
-  border: 1px solid var(--color-grey-2);
-  border-radius: 10px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
+  background: var(--tcs-canvas);
+  border: 1px solid var(--tcs-hairline);
+  border-radius: var(--tcs-radius-lg);
+  padding: 24px;
+  margin-bottom: 24px;
 
   .panel-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 
     h2 {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--color-grey-5);
+      font-size: 18px;
+      font-weight: 500;
+      letter-spacing: -0.1px;
+      color: var(--tcs-ink);
     }
   }
 
@@ -86,70 +100,125 @@ button:focus-visible,
   }
 
   .panel-link {
-    color: var(--nav-active-color);
+    color: var(--tcs-primary);
     font-size: var(--font-size-sm);
+    font-weight: 500;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+
+  // A table runs edge to edge inside its panel; the panel keeps its padding for everything else.
+  > .table-container,
+  > .p-tabview .table-container {
+    margin: 0 -24px;
+    width: calc(100% + 48px);
+    max-width: none;
+  }
+
+  > .table-container .p-datatable .p-datatable-thead > tr > th:first-child,
+  > .table-container .p-datatable .p-datatable-tbody > tr > td:first-child,
+  > .p-tabview .table-container .p-datatable .p-datatable-thead > tr > th:first-child,
+  > .p-tabview .table-container .p-datatable .p-datatable-tbody > tr > td:first-child {
+    padding-left: 24px;
+  }
+
+  > .table-container .p-datatable .p-datatable-thead > tr > th:last-child,
+  > .table-container .p-datatable .p-datatable-tbody > tr > td:last-child,
+  > .p-tabview .table-container .p-datatable .p-datatable-thead > tr > th:last-child,
+  > .p-tabview .table-container .p-datatable .p-datatable-tbody > tr > td:last-child {
+    padding-right: 24px;
+  }
+
+  .table-paginator-container {
+    padding: 0 24px;
   }
 }
 
+// --- Dashboard summary cards -----------------------------------------------------------------------
+
 .summary-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 
   .summary-card {
     display: flex;
     align-items: center;
-    gap: 14px;
-    background: var(--color-white);
-    border: 1px solid var(--color-grey-2);
-    border-radius: 10px;
-    padding: 18px 20px;
-    transition: box-shadow 0.15s ease;
+    gap: 16px;
+    background: var(--tcs-canvas);
+    border: 1px solid var(--tcs-hairline);
+    border-radius: var(--tcs-radius-lg);
+    padding: 20px 24px;
+    transition: box-shadow 0.15s ease, border-color 0.15s ease;
 
     &:hover {
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
+      box-shadow: var(--tcs-shadow-1);
+      border-color: var(--tcs-hairline-input);
     }
 
     .summary-icon {
-      font-size: 22px;
-      color: var(--main-color);
+      flex: 0 0 36px;
+      width: 36px;
+      height: 36px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--tcs-radius-pill);
+      background: var(--tcs-primary-tint);
+      color: var(--tcs-primary-deep);
+      font-size: 16px;
     }
 
     .summary-value {
       display: block;
-      font-size: 24px;
-      font-weight: 700;
-      color: var(--color-grey-5);
+      font-size: 28px;
+      font-weight: 300;
+      line-height: 1.1;
+      letter-spacing: -0.4px;
+      color: var(--tcs-ink);
+      font-variant-numeric: tabular-nums;
     }
 
     .summary-label {
-      color: var(--color-grey-9);
+      color: var(--tcs-ink-mute);
       font-size: var(--font-size-sm);
     }
   }
 }
+
+// --- Detail lists ----------------------------------------------------------------------------------
 
 .detail-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px 24px;
+  gap: 16px 24px;
+  margin: 0;
 
   .detail-row {
     dt {
-      color: var(--color-grey-9);
+      color: var(--tcs-ink-mute);
       font-size: var(--font-size-sm);
+      font-weight: 500;
     }
+
     dd {
-      color: var(--color-grey-5);
+      color: var(--tcs-ink);
       font-size: var(--font-size-md);
-      margin-top: 2px;
+      margin: 4px 0 0;
+      font-variant-numeric: tabular-nums;
+      word-break: break-word;
     }
   }
 }
 
+// --- Filters / table toolbar -----------------------------------------------------------------------
+
 .filter-bar {
   display: flex;
+  align-items: flex-end;
   gap: 16px;
   flex-wrap: wrap;
   margin-bottom: 16px;
@@ -159,45 +228,55 @@ button:focus-visible,
     flex-direction: column;
     gap: 6px;
     font-size: var(--font-size-sm);
-    color: var(--color-grey-9);
+    font-weight: 500;
+    color: var(--tcs-ink-mute);
+
+    .p-dropdown {
+      min-width: 140px;
+    }
   }
 }
+
+// --- Status badges (DESIGN.md › Colors › Semantic) -------------------------------------------------
 
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: var(--font-size-sm);
+  padding: 4px 8px;
+  border-radius: var(--tcs-radius-pill);
+  font-size: 12px;
   font-weight: 500;
-  border: 1px solid transparent;
+  line-height: 1;
+  white-space: nowrap;
 
   i {
-    font-size: 11px;
+    font-size: 10px;
   }
 
   &.tone-neutral {
-    background: var(--color-grey-1);
-    color: var(--color-grey-5);
+    background: var(--tcs-neutral-tint);
+    color: var(--tcs-neutral);
   }
   &.tone-info {
-    background: #e7effe;
-    color: #1d4ed8;
+    background: var(--tcs-info-tint);
+    color: var(--tcs-info);
   }
   &.tone-success {
-    background: #e6f6ec;
-    color: #157347;
+    background: var(--tcs-success-tint);
+    color: var(--tcs-success);
   }
   &.tone-warning {
-    background: #fdf2e2;
-    color: #b26a00;
+    background: var(--tcs-warning-tint);
+    color: var(--tcs-warning);
   }
   &.tone-danger {
-    background: #fdecec;
-    color: #b42318;
+    background: var(--tcs-danger-tint);
+    color: var(--tcs-danger);
   }
 }
+
+// --- Loading, empty and error states ---------------------------------------------------------------
 
 .state-box {
   display: flex;
@@ -206,168 +285,189 @@ button:focus-visible,
   justify-content: center;
   gap: 10px;
   padding: 40px 20px;
-  color: var(--color-grey-9);
+  color: var(--tcs-ink-mute);
   text-align: center;
 
   i {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   &.state-error {
-    color: var(--color-red-1);
+    color: var(--tcs-danger);
   }
 
   .state-ref {
     font-size: var(--font-size-xs);
-    color: var(--color-grey-9);
+    color: var(--tcs-ink-mute);
   }
 
   .state-field-errors {
     margin: 0;
     padding-left: 1.25rem;
-    color: var(--color-grey-5);
+    color: var(--tcs-ink-secondary);
     text-align: left;
   }
 }
 
 .banner {
   padding: 10px 14px;
-  border-radius: 8px;
-  margin-bottom: 14px;
+  border-radius: var(--tcs-radius-md);
+  margin-bottom: 16px;
   font-size: var(--font-size-sm);
 
   &.banner-warning {
-    background: #fdf2e2;
-    color: #8a5a00;
+    background: var(--tcs-warning-tint);
+    color: var(--tcs-warning);
     border: 1px solid #f2d9a8;
   }
 }
 
 .muted {
-  color: var(--color-grey-9);
+  color: var(--tcs-ink-mute);
   font-size: var(--font-size-sm);
 }
 
-// Forms
+// --- Forms -----------------------------------------------------------------------------------------
+
 .entity-form {
   .form-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 16px;
+    gap: 16px 24px;
   }
 
   .form-item {
     display: flex;
     flex-direction: column;
     gap: 6px;
-    margin-bottom: 12px;
+    margin-bottom: 8px;
+
+    .p-dropdown,
+    .p-inputtext,
+    .p-inputtextarea {
+      width: 100%;
+    }
   }
 
   .form-label {
     font-size: var(--font-size-sm);
-    color: var(--color-grey-5);
+    color: var(--tcs-ink);
     font-weight: 500;
   }
 
   .form-required {
-    color: var(--color-red-2);
+    color: var(--tcs-danger);
   }
 
   .form-help {
-    color: var(--color-grey-9);
+    color: var(--tcs-ink-mute);
     font-size: var(--font-size-xs);
   }
 
   .err {
-    color: var(--color-red-2);
+    color: var(--tcs-danger);
     font-size: var(--font-size-xs);
   }
 
   .form-item.invalid input,
   .form-item.invalid .p-dropdown {
-    border-color: var(--color-red-2);
+    border-color: var(--tcs-danger);
   }
 
   .form-summary-error {
-    color: var(--color-red-2);
+    color: var(--tcs-danger);
     font-size: var(--font-size-sm);
     margin-top: 12px;
   }
 
   .form-actions {
     display: flex;
-    gap: 10px;
-    margin-top: 18px;
+    gap: 8px;
+    margin-top: 20px;
   }
 }
 
+// --- Account balances --------------------------------------------------------------------------------
+
 .balances-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 32px;
 
   h3 {
-    font-size: 14px;
+    font-size: var(--font-size-sm);
     font-weight: 600;
+    color: var(--tcs-ink-mute);
     margin-bottom: 8px;
   }
 
   .balance-list {
     list-style: none;
+    margin: 0;
+    padding: 0;
+
     li {
       display: flex;
       justify-content: space-between;
-      padding: 6px 0;
-      border-bottom: 1px solid var(--color-grey-1);
+      align-items: center;
+      height: var(--tcs-row-height);
+      border-bottom: 1px solid var(--tcs-hairline);
+      color: var(--tcs-ink-secondary);
+    }
+
+    strong {
+      color: var(--tcs-ink);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
     }
   }
 }
 
 .ledger-actions {
-  margin-bottom: 12px;
+  margin-bottom: 16px;
   justify-content: flex-end;
 }
 
-.layout-topbar-role {
-  color: var(--color-grey-9);
-  font-size: var(--font-size-sm);
-}
+// --- Login (the one non-dense surface) ------------------------------------------------------------
 
-// Login
 .login-page {
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #f5f3ff, #eef2ff);
   padding: 20px;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(83, 58, 253, 0.1), transparent 70%),
+    var(--tcs-canvas-soft);
 
   .login-card {
-    background: #fff;
-    border-radius: 14px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
-    padding: 40px 36px;
+    background: var(--tcs-canvas);
+    border: 1px solid var(--tcs-hairline);
+    border-radius: var(--tcs-radius-lg);
+    box-shadow: var(--tcs-shadow-2);
+    padding: 40px 36px 32px;
     width: 100%;
     max-width: 400px;
     text-align: center;
 
     h1 {
-      font-size: 22px;
-      font-weight: 700;
-      color: var(--color-grey-5);
-      margin-top: 12px;
+      font-size: 26px;
+      font-weight: 300;
+      letter-spacing: -0.26px;
+      color: var(--tcs-ink);
+      margin-top: 16px;
     }
 
     .login-subtitle {
-      color: var(--color-grey-9);
+      color: var(--tcs-ink-mute);
       font-size: var(--font-size-sm);
-      margin-bottom: 20px;
+      margin: 6px 0 24px;
     }
 
     .login-alert {
-      background: #fdf2e2;
-      color: #8a5a00;
-      border-radius: 8px;
+      background: var(--tcs-warning-tint);
+      color: var(--tcs-warning);
+      border-radius: var(--tcs-radius-md);
       padding: 10px;
       font-size: var(--font-size-sm);
       margin-bottom: 16px;
@@ -379,22 +479,29 @@ button:focus-visible,
       align-items: center;
       justify-content: center;
       gap: 8px;
-      background: var(--main-color);
-      color: #fff;
+      background: var(--tcs-primary);
+      color: var(--tcs-on-primary);
       border: none;
-      border-radius: 8px;
-      padding: 12px 16px;
+      border-radius: var(--tcs-radius-pill);
+      min-height: 40px;
+      padding: 10px 16px;
+      font-family: var(--tcs-font);
       font-size: var(--font-size-md);
-      font-weight: 600;
+      font-weight: 500;
       cursor: pointer;
+      transition: background-color 0.15s ease;
 
       &:hover {
-        filter: brightness(1.05);
+        background: var(--tcs-primary-deep);
+      }
+
+      &:active {
+        background: var(--tcs-primary-press);
       }
     }
 
     .login-hint {
-      color: var(--color-grey-9);
+      color: var(--tcs-ink-mute);
       font-size: var(--font-size-xs);
       margin-top: 16px;
     }

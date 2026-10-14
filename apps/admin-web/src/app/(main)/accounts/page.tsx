@@ -100,7 +100,7 @@ export default function AccountsPage() {
               field="accountId"
               header="Account ID"
               body={(a: Account) => (
-                <Link href={`/accounts/${encodeURIComponent(a.accountId)}`}>
+                <Link href={`/accounts/${encodeURIComponent(a.accountId)}`} title={a.accountId}>
                   {a.accountId}
                 </Link>
               )}

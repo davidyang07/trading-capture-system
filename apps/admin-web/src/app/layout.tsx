@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import { auth } from "@/auth";
 import { Providers } from "@/app/providers";
-import "primereact/resources/themes/lara-light-cyan/theme.css";
+import "primereact/resources/themes/lara-light-indigo/theme.css";
 import "primeicons/primeicons.css";
 import "@/style/global.scss";
 import "@/style/primereact.scss";
-import "@/style/form.scss";
 import "@/style/app.scss";
 
 export const metadata: Metadata = {

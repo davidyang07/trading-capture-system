@@ -14,7 +14,7 @@ import { AsyncBoundary } from "@/components/feedback/States";
 import { useQuery } from "@/hooks/useQuery";
 import { searchExecutions } from "@/api/executions";
 import { canWriteExecutions } from "@/lib/permissions";
-import { formatDateTime, formatMoney } from "@/lib/format";
+import { formatDateTime, formatMoney, formatQuantity } from "@/lib/format";
 import { EXECUTION_TYPE_OPTIONS, SIDE_OPTIONS } from "@/lib/options";
 import type { Execution, ExecutionSearchParams } from "@/types/api";
 
@@ -110,7 +110,7 @@ export default function ExecutionsPage() {
               field="execId"
               header="Exec ID"
               body={(e: Execution) => (
-                <Link href={`/executions/${encodeURIComponent(e.internalId)}`}>
+                <Link href={`/executions/${encodeURIComponent(e.internalId)}`} title={e.execId}>
                   {e.execId}
                 </Link>
               )}
@@ -119,7 +119,7 @@ export default function ExecutionsPage() {
               field="orderId"
               header="Order"
               body={(e: Execution) => (
-                <Link href={`/orders/${encodeURIComponent(e.orderId)}`}>
+                <Link href={`/orders/${encodeURIComponent(e.orderId)}`} title={e.orderId}>
                   {e.orderId}
                 </Link>
               )}
@@ -128,9 +128,10 @@ export default function ExecutionsPage() {
               header="Type"
               body={(e: Execution) => <StatusBadge value={e.execType} />}
             />
-            <Column header="Qty" body={(e: Execution) => formatMoney(e.lastQty)} />
+            <Column header="Qty" align="right" body={(e: Execution) => formatQuantity(e.lastQty)} />
             <Column
               header="Price"
+              align="right"
               body={(e: Execution) => formatMoney(e.lastPx)}
             />
             <Column

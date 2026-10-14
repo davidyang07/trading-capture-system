@@ -33,6 +33,11 @@ export function formatMoney(
   return currency ? `${amount} ${currency}` : amount;
 }
 
+/** A quantity (shares, units): grouped digits at the API's scale, never with a currency. */
+export function formatQuantity(value: string | null | undefined): string {
+  return formatDecimal(value, 0);
+}
+
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) {
     return "—";

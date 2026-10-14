@@ -27,25 +27,15 @@ export default function Breadcrumb() {
       }
       return {
         url: path,
-        label:
-          routerNameMap[path] ??
-          decodeURIComponent(segment).replace(/[-_]/g, " "),
+        // Unknown segments are record ids (ACC-SEED-INV1, ORD-<uuid>): show them verbatim.
+        label: routerNameMap[path] ?? decodeURIComponent(segment),
       };
     });
   }, [pathname]);
 
   return (
     <>
-      <BreadCrumb
-        model={model}
-        style={{
-          color: "#4B5563",
-          border: "none",
-          fontSize: "14px",
-          backgroundColor: "transparent",
-          height: "50px",
-        }}
-      />
+      <BreadCrumb model={model} />
     </>
   );
 }

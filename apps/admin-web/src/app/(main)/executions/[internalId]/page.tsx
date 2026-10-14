@@ -16,6 +16,7 @@ import {
   formatDateTime,
   formatMoney,
   humanizeEnum,
+  formatQuantity,
 } from "@/lib/format";
 import type { ChainLink, ExecutionDetail, MiscFee } from "@/types/api";
 
@@ -110,7 +111,7 @@ export default function ExecutionDetailPage() {
                     }
                   />
                   <DetailRow label="Side" value={humanizeEnum(e.side)} />
-                  <DetailRow label="Quantity" value={formatMoney(e.lastQty)} />
+                  <DetailRow label="Quantity" value={formatQuantity(e.lastQty)} />
                   <DetailRow label="Price" value={formatMoney(e.lastPx)} />
                   <DetailRow
                     label="Order status"
@@ -118,7 +119,7 @@ export default function ExecutionDetailPage() {
                   />
                   <DetailRow
                     label="Cumulative / Remaining"
-                    value={`${formatMoney(e.cumQty)} / ${formatMoney(
+                    value={`${formatQuantity(e.cumQty)} / ${formatQuantity(
                       e.leavesQty
                     )}`}
                   />
@@ -153,6 +154,7 @@ export default function ExecutionDetailPage() {
                     <Column field="feeType" header="Type" />
                     <Column
                       header="Amount"
+                      align="right"
                       body={(f: MiscFee) => formatMoney(f.amount, f.currency)}
                     />
                     <Column
@@ -184,6 +186,7 @@ export default function ExecutionDetailPage() {
                           href={`/executions/${encodeURIComponent(
                             c.internalId
                           )}`}
+                          title={c.execId}
                         >
                           {c.execId}
                         </Link>
@@ -196,7 +199,8 @@ export default function ExecutionDetailPage() {
                   />
                   <Column
                     header="Qty"
-                    body={(c: ChainLink) => formatMoney(c.lastQty)}
+                    align="right"
+                    body={(c: ChainLink) => formatQuantity(c.lastQty)}
                   />
                   <Column
                     header="Time"

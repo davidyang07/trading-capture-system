@@ -12,7 +12,7 @@ import { useQuery } from "@/hooks/useQuery";
 import { searchOrders } from "@/api/orders";
 import { searchAccounts } from "@/api/accounts";
 import { isAdmin } from "@/lib/permissions";
-import { formatMoney, humanizeEnum } from "@/lib/format";
+import { formatMoney, humanizeEnum, formatQuantity } from "@/lib/format";
 import type { Account, Order } from "@/types/api";
 
 function SummaryCard({
@@ -113,7 +113,7 @@ export default function DashboardPage() {
                 field="orderId"
                 header="Order ID"
                 body={(o: Order) => (
-                  <Link href={`/orders/${encodeURIComponent(o.orderId)}`}>
+                  <Link href={`/orders/${encodeURIComponent(o.orderId)}`} title={o.orderId}>
                     {o.orderId}
                   </Link>
                 )}
@@ -125,7 +125,8 @@ export default function DashboardPage() {
               <Column field="instrumentId" header="Instrument" />
               <Column
                 header="Quantity"
-                body={(o: Order) => formatMoney(o.quantity, o.currency)}
+                align="right"
+                body={(o: Order) => formatQuantity(o.quantity)}
               />
               <Column
                 header="Status"
@@ -162,7 +163,7 @@ export default function DashboardPage() {
                 field="accountId"
                 header="Account ID"
                 body={(a: Account) => (
-                  <Link href={`/accounts/${encodeURIComponent(a.accountId)}`}>
+                  <Link href={`/accounts/${encodeURIComponent(a.accountId)}`} title={a.accountId}>
                     {a.accountId}
                   </Link>
                 )}

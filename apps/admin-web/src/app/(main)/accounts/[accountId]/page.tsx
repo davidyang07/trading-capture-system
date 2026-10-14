@@ -31,6 +31,7 @@ import {
   formatDateTime,
   formatMoney,
   humanizeEnum,
+  formatQuantity,
 } from "@/lib/format";
 import type {
   Account,
@@ -164,7 +165,7 @@ function BalancesPanel({
                 {b.securityPositions.map((p) => (
                   <li key={p.instrumentId}>
                     <span>{p.instrumentId}</span>
-                    <strong>{formatMoney(p.quantity)}</strong>
+                    <strong>{formatQuantity(p.quantity)}</strong>
                   </li>
                 ))}
               </ul>
@@ -218,6 +219,7 @@ function CashLedger({
           />
           <Column
             header="Amount"
+            align="right"
             body={(t: CashTransaction) => formatMoney(t.amount, t.currency)}
           />
           <Column
@@ -269,7 +271,8 @@ function SecurityLedger({
           <Column field="instrumentId" header="Instrument" />
           <Column
             header="Quantity"
-            body={(t: SecurityTransaction) => formatMoney(t.quantity)}
+            align="right"
+            body={(t: SecurityTransaction) => formatQuantity(t.quantity)}
           />
           <Column
             header="Posted"

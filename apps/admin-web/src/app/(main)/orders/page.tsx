@@ -12,7 +12,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { AsyncBoundary } from "@/components/feedback/States";
 import { useQuery } from "@/hooks/useQuery";
 import { searchOrders } from "@/api/orders";
-import { formatDate, formatMoney, humanizeEnum } from "@/lib/format";
+import { formatDate, formatMoney, humanizeEnum, formatQuantity } from "@/lib/format";
 import { ORDER_STATUS_OPTIONS, SIDE_OPTIONS } from "@/lib/options";
 import type { Order, OrderSearchParams } from "@/types/api";
 
@@ -104,7 +104,7 @@ export default function OrdersPage() {
               field="orderId"
               header="Order ID"
               body={(o: Order) => (
-                <Link href={`/orders/${encodeURIComponent(o.orderId)}`}>
+                <Link href={`/orders/${encodeURIComponent(o.orderId)}`} title={o.orderId}>
                   {o.orderId}
                 </Link>
               )}
@@ -113,11 +113,13 @@ export default function OrdersPage() {
             <Column field="instrumentId" header="Instrument" />
             <Column
               header="Quantity"
-              body={(o: Order) => formatMoney(o.quantity, o.currency)}
+              align="right"
+              body={(o: Order) => formatQuantity(o.quantity)}
             />
             <Column
               header="Filled"
-              body={(o: Order) => formatMoney(o.cumQty)}
+              align="right"
+              body={(o: Order) => formatQuantity(o.cumQty)}
             />
             <Column
               header="Settle"

@@ -21,6 +21,7 @@ import {
   formatDateTime,
   formatMoney,
   humanizeEnum,
+  formatQuantity,
 } from "@/lib/format";
 import type { Execution, Order, UpdateOrderRequest } from "@/types/api";
 
@@ -181,11 +182,11 @@ export default function OrderDetailPage() {
                   />
                   <DetailRow
                     label="Quantity"
-                    value={formatMoney(order.quantity, order.currency)}
+                    value={formatQuantity(order.quantity)}
                   />
                   <DetailRow
                     label="Filled / Remaining"
-                    value={`${formatMoney(order.cumQty)} / ${formatMoney(
+                    value={`${formatQuantity(order.cumQty)} / ${formatQuantity(
                       order.leavesQty
                     )}`}
                   />
@@ -226,6 +227,7 @@ export default function OrderDetailPage() {
                           href={`/executions/${encodeURIComponent(
                             e.internalId
                           )}`}
+                          title={e.execId}
                         >
                           {e.execId}
                         </Link>
@@ -239,10 +241,12 @@ export default function OrderDetailPage() {
                     />
                     <Column
                       header="Qty"
-                      body={(e: Execution) => formatMoney(e.lastQty)}
+                      align="right"
+                      body={(e: Execution) => formatQuantity(e.lastQty)}
                     />
                     <Column
                       header="Price"
+                      align="right"
                       body={(e: Execution) => formatMoney(e.lastPx)}
                     />
                     <Column

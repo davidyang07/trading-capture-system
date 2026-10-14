@@ -24,8 +24,8 @@ export const Header = () => {
           src="/logo.png"
           alt=""
           className="logo-img"
-          width={50}
-          height={50}
+          width={32}
+          height={32}
           priority
         />
         <div className="layout-topbar-desc">
@@ -42,19 +42,19 @@ export const Header = () => {
             <Image
               src="/avatar.png"
               alt=""
-              className="logo-img"
-              width={31}
-              height={31}
+              className="avatar-img"
+              width={28}
+              height={28}
               priority
             />
-            <span>
+            <span className="layout-topbar-user">
               {username}
               <span className="layout-topbar-role"> · {role}</span>
             </span>
             <Button
               label="Log out"
-              severity="help"
-              rounded
+              outlined
+              size="small"
               onClick={handleLogout}
             />
           </>
