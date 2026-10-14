@@ -14,7 +14,7 @@ import { AsyncBoundary, ErrorState, LoadingState } from "@/components/feedback/S
 import { useToast } from "@/components/Toast/ToastProvider";
 import { useQuery } from "@/hooks/useQuery";
 import { useMutation } from "@/hooks/useMutation";
-import { isAdmin } from "@/lib/permissions";
+import { canManageAccounts } from "@/lib/permissions";
 import { isApiError } from "@/lib/api-error";
 import {
   changeAccountStatus,
@@ -288,7 +288,7 @@ export default function AccountDetailPage() {
   const [cashDialog, setCashDialog] = useState(false);
   const [securityDialog, setSecurityDialog] = useState(false);
   const { data: session } = useSession();
-  const admin = isAdmin(session ?? null);
+  const canManage = canManageAccounts(session ?? null);
   const bump = () => setRefreshToken((n) => n + 1);
 
   const query = useQuery(
@@ -307,18 +307,22 @@ export default function AccountDetailPage() {
           </Link>
         }
       />
-      <PostCashDialog
-        accountId={accountId}
-        visible={cashDialog}
-        onHide={() => setCashDialog(false)}
-        onPosted={bump}
-      />
-      <PostSecurityDialog
-        accountId={accountId}
-        visible={securityDialog}
-        onHide={() => setSecurityDialog(false)}
-        onPosted={bump}
-      />
+      {canManage ? (
+        <>
+          <PostCashDialog
+            accountId={accountId}
+            visible={cashDialog}
+            onHide={() => setCashDialog(false)}
+            onPosted={bump}
+          />
+          <PostSecurityDialog
+            accountId={accountId}
+            visible={securityDialog}
+            onHide={() => setSecurityDialog(false)}
+            onPosted={bump}
+          />
+        </>
+      ) : null}
 
       {query.loading && !query.data ? <LoadingState /> : null}
       {query.error && !query.data ? (
@@ -330,7 +334,7 @@ export default function AccountDetailPage() {
           <section className="panel" aria-labelledby="account-heading">
             <div className="panel-head">
               <h2 id="account-heading">{query.data.accountName}</h2>
-              {admin ? (
+              {canManage ? (
                 <StatusActions account={query.data} onChanged={bump} />
               ) : null}
             </div>
@@ -361,25 +365,29 @@ export default function AccountDetailPage() {
                 />
               </TabPanel>
               <TabPanel header="Cash">
-                <div className="panel-actions ledger-actions">
-                  <Button
-                    label="Post cash transaction"
-                    icon="pi pi-plus"
-                    size="small"
-                    onClick={() => setCashDialog(true)}
-                  />
-                </div>
+                {canManage ? (
+                  <div className="panel-actions ledger-actions">
+                    <Button
+                      label="Post cash transaction"
+                      icon="pi pi-plus"
+                      size="small"
+                      onClick={() => setCashDialog(true)}
+                    />
+                  </div>
+                ) : null}
                 <CashLedger accountId={accountId} refreshToken={refreshToken} />
               </TabPanel>
               <TabPanel header="Securities">
-                <div className="panel-actions ledger-actions">
-                  <Button
-                    label="Post security transaction"
-                    icon="pi pi-plus"
-                    size="small"
-                    onClick={() => setSecurityDialog(true)}
-                  />
-                </div>
+                {canManage ? (
+                  <div className="panel-actions ledger-actions">
+                    <Button
+                      label="Post security transaction"
+                      icon="pi pi-plus"
+                      size="small"
+                      onClick={() => setSecurityDialog(true)}
+                    />
+                  </div>
+                ) : null}
                 <SecurityLedger
                   accountId={accountId}
                   refreshToken={refreshToken}

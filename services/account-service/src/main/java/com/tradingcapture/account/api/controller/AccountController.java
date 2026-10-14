@@ -30,10 +30,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.util.UriComponentsBuilder;
 
 /**
- * Account CRUD, search, and lifecycle. Administrative mutations require the
- * {@code account:admin} scope; reads require {@code account:balance}. Ownership isolation for
- * investors is enforced in the service layer against the JWT-derived subject (unowned accounts
- * answer 404, never 403 — existence is not revealed).
+ * Account CRUD, search, and lifecycle. Creating an account requires the {@code account:admin}
+ * scope (investors may open their own, which start PENDING); renaming and every lifecycle
+ * transition additionally require the realm {@code ADMIN} role — the scope alone is carried by
+ * every admin-web user token, so it never authorizes administration by itself. Reads require
+ * {@code account:balance}. Ownership isolation for investors is enforced in the service layer
+ * against the JWT-derived subject (unowned accounts answer 404, never 403 — existence is not
+ * revealed).
  */
 @RestController
 @RequestMapping("/api/v1/accounts")
@@ -89,9 +92,10 @@ public class AccountController {
     }
 
     @PutMapping("/{accountId}")
-    @PreAuthorize("hasAuthority('SCOPE_account:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_account:admin') and hasRole('ADMIN')")
     @Operation(summary = "Rename an account")
     @ApiResponse(responseCode = "200", description = "Updated")
+    @ApiResponse(responseCode = "403", description = "Caller lacks the ADMIN role")
     @ApiResponse(responseCode = "404", description = "Unknown or not owned")
     public AccountResponse update(Authentication authentication,
                                   @PathVariable String accountId,
@@ -101,9 +105,10 @@ public class AccountController {
     }
 
     @PostMapping("/{accountId}/activate")
-    @PreAuthorize("hasAuthority('SCOPE_account:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_account:admin') and hasRole('ADMIN')")
     @Operation(summary = "Activate a PENDING or SUSPENDED account")
     @ApiResponse(responseCode = "200", description = "Activated")
+    @ApiResponse(responseCode = "403", description = "Caller lacks the ADMIN role")
     @ApiResponse(responseCode = "409", description = "Illegal lifecycle transition")
     public AccountResponse activate(Authentication authentication, @PathVariable String accountId) {
         AccessContext ctx = accessContextFactory.from(authentication);
@@ -111,9 +116,10 @@ public class AccountController {
     }
 
     @PostMapping("/{accountId}/suspend")
-    @PreAuthorize("hasAuthority('SCOPE_account:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_account:admin') and hasRole('ADMIN')")
     @Operation(summary = "Suspend an ACTIVE account — suspended accounts cannot post transactions")
     @ApiResponse(responseCode = "200", description = "Suspended")
+    @ApiResponse(responseCode = "403", description = "Caller lacks the ADMIN role")
     @ApiResponse(responseCode = "409", description = "Illegal lifecycle transition")
     public AccountResponse suspend(Authentication authentication, @PathVariable String accountId) {
         AccessContext ctx = accessContextFactory.from(authentication);
@@ -121,9 +127,10 @@ public class AccountController {
     }
 
     @PostMapping("/{accountId}/close")
-    @PreAuthorize("hasAuthority('SCOPE_account:admin')")
+    @PreAuthorize("hasAuthority('SCOPE_account:admin') and hasRole('ADMIN')")
     @Operation(summary = "Close an account (requires every ledger-derived balance to be zero)")
     @ApiResponse(responseCode = "200", description = "Closed")
+    @ApiResponse(responseCode = "403", description = "Caller lacks the ADMIN role")
     @ApiResponse(responseCode = "409", description = "Illegal transition or non-zero balance")
     public AccountResponse close(Authentication authentication, @PathVariable String accountId) {
         AccessContext ctx = accessContextFactory.from(authentication);

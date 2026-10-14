@@ -33,14 +33,14 @@ class ConcurrencyIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void concurrentDebitsCannotOverdrawTheAccount() throws Exception {
-        String bearer = AccountTestTokens.investorBearer("investor1");
-        String id = createAccount(bearer, "Cash", "USD");
-        transition(bearer, id, "activate");
-        postCash(bearer, id, """
+        String admin = AccountTestTokens.adminBearer();
+        String id = createAccount(AccountTestTokens.investorBearer("investor1"), "Cash", "USD");
+        transition(admin, id, "activate");
+        postCash(admin, id, """
                 { "direction": "CREDIT", "transactionType": "DEPOSIT", "amount": "1000.00", "currency": "USD" }
                 """).andExpect(status().isCreated());
 
-        AccessContext ctx = new AccessContext("investor1", false);
+        AccessContext ctx = new AccessContext("admin1", true);
         CountDownLatch start = new CountDownLatch(1);
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {

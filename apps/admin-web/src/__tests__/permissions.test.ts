@@ -1,4 +1,5 @@
 import {
+  canManageAccounts,
   canManageReferenceData,
   canWriteExecutions,
   isAdmin,
@@ -23,6 +24,12 @@ describe("permissions", () => {
     expect(canWriteExecutions(investor)).toBe(false);
     expect(canManageReferenceData(admin)).toBe(true);
     expect(canManageReferenceData(investor)).toBe(false);
+  });
+
+  it("gates ledger posts and account lifecycle changes to admins", () => {
+    expect(canManageAccounts(admin)).toBe(true);
+    expect(canManageAccounts(investor)).toBe(false);
+    expect(canManageAccounts(null)).toBe(false);
   });
 });
 

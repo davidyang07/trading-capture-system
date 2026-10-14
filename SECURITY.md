@@ -57,8 +57,11 @@ are masked as **404** (below).
   scopes with an `oidc-audience-mapper`.
 
 Write operations that mutate global or privileged state require **both** a scope **and** the
-`ADMIN` role (execution writes, enrichment reference-data mutations), so a scope leaked to a user
-token is not by itself sufficient.
+`ADMIN` role (execution writes, enrichment reference-data mutations, account lifecycle and rename,
+and cash/security ledger posts), so a scope leaked to a user token is not by itself sufficient.
+This matters in practice: the admin-web client's user scopes (including `account:admin` and
+`account:balance`) are default scopes with no role mapping, so **every** admin-web user token —
+investors included — carries them.
 
 ### Scope catalog
 
@@ -67,8 +70,8 @@ token is not by itself sufficient.
 | `order:create/read/update/delete` | order CRUD | admin-web (users) |
 | `execution:read` | read executions | admin-web |
 | `execution:write` | capture/correct/cancel executions (also needs `ADMIN`) | admin-web, allocation-engine |
-| `account:admin` | account lifecycle | admin-web |
-| `account:balance` | post ledger entries, read balances | admin-web |
+| `account:admin` | open an account; account lifecycle + rename (the latter also need `ADMIN`) | admin-web |
+| `account:balance` | read ledgers + balances; post ledger entries (also needs `ADMIN`) | admin-web |
 | `account:validate` | machine batch account validation (`/internal`) | trading-service, allocation-engine — **never** admin-web |
 | `enrichment:read` | read reference data | admin-web, trading-service, allocation-engine |
 | `enrichment:admin` | mutate reference data (also needs `ADMIN`) | admin-web |
@@ -127,9 +130,10 @@ contract to unauthenticated callers.
 | POST | `/api/v1/accounts` | U-ADM/INV | `account:admin` | — | owner = subject (ADM may nominate) |
 | GET | `/api/v1/accounts` | U-INV/ADM | `account:balance` | — | list filtered to owner (ADM: all) |
 | GET | `/api/v1/accounts/{id}` | U-INV/ADM | `account:balance` | — | 404-masked |
-| PUT | `/api/v1/accounts/{id}` | U-ADM | `account:admin` | — | 404-masked |
-| POST | `/api/v1/accounts/{id}/{activate,suspend,close}` | U-ADM | `account:admin` | — | 404-masked |
-| POST/GET | `/api/v1/accounts/{id}/cash-transactions`, `/security-transactions`, `/balances` | U-INV/ADM | `account:balance` | — | 404-masked |
+| PUT | `/api/v1/accounts/{id}` | U-ADM | `account:admin` | `ADMIN` | none (admin) |
+| POST | `/api/v1/accounts/{id}/{activate,suspend,close}` | U-ADM | `account:admin` | `ADMIN` | none (admin) |
+| POST | `/api/v1/accounts/{id}/cash-transactions`, `/security-transactions` | U-ADM | `account:balance` | `ADMIN` | none (admin) |
+| GET | `/api/v1/accounts/{id}/cash-transactions`, `/security-transactions`, `/balances` | U-INV/ADM | `account:balance` | — | 404-masked |
 | POST | `/internal/v1/accounts/batch` | M | `account:validate` \| `allocation:process` | — | cross-owner by contract |
 
 ### enrichment-service (audience `enrichment-service`)

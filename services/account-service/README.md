@@ -43,11 +43,13 @@ the API contract of record; the service-boundary and ledger rules are summarized
 |---|---|---|
 | `POST /api/v1/accounts` | `account:admin` | any holder; owner = JWT subject (ADMIN may set another) |
 | `GET /api/v1/accounts`, `GET /api/v1/accounts/{id}` | `account:balance` | ADMIN: all; INVESTOR: own only |
-| `PUT /api/v1/accounts/{id}` | `account:admin` | owner or ADMIN |
-| `POST /api/v1/accounts/{id}/activate|suspend|close` | `account:admin` | owner or ADMIN |
+| `PUT /api/v1/accounts/{id}` | `account:admin` + role `ADMIN` | ADMIN only (403 otherwise) |
+| `POST /api/v1/accounts/{id}/activate|suspend|close` | `account:admin` + role `ADMIN` | ADMIN only (403 otherwise) |
 | `GET /api/v1/accounts/{id}/balances` | `account:balance` | owner or ADMIN |
-| `POST\|GET /api/v1/accounts/{id}/cash-transactions` | `account:balance` | owner or ADMIN |
-| `POST\|GET /api/v1/accounts/{id}/security-transactions` | `account:balance` | owner or ADMIN |
+| `POST /api/v1/accounts/{id}/cash-transactions` | `account:balance` + role `ADMIN` | ADMIN only (403 otherwise) |
+| `GET /api/v1/accounts/{id}/cash-transactions` | `account:balance` | owner or ADMIN |
+| `POST /api/v1/accounts/{id}/security-transactions` | `account:balance` + role `ADMIN` | ADMIN only (403 otherwise) |
+| `GET /api/v1/accounts/{id}/security-transactions` | `account:balance` | owner or ADMIN |
 | `POST /internal/v1/accounts/batch` | `account:validate` **or** `allocation:process` (machine-only) | machine (cross-owner) |
 
 Unowned resources answer **404** (existence is never revealed); missing/invalid tokens 401 and

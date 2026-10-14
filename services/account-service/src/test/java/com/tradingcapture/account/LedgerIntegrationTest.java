@@ -9,13 +9,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-/** End-to-end ledger behavior: balances, sufficiency rules, idempotency — over real MySQL. */
+/**
+ * End-to-end ledger behavior: balances, sufficiency rules, idempotency — over real MySQL. Postings
+ * are made by an admin on investor-owned accounts (ledger writes are ADMIN-only).
+ */
 class LedgerIntegrationTest extends IntegrationTestSupport {
 
+    /** An investor-owned account, activated by an admin (lifecycle and postings are ADMIN-only). */
     private String activeAccount(String owner, String currency) throws Exception {
-        String bearer = AccountTestTokens.investorBearer(owner);
-        String id = createAccount(bearer, "Cash", currency);
-        transition(bearer, id, "activate");
+        String id = createAccount(AccountTestTokens.investorBearer(owner), "Cash", currency);
+        transition(AccountTestTokens.adminBearer(), id, "activate");
         return id;
     }
 
@@ -27,7 +30,7 @@ class LedgerIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void depositsAndWithdrawalsDeriveTheBalance() throws Exception {
-        String bearer = AccountTestTokens.investorBearer("investor1");
+        String bearer = AccountTestTokens.adminBearer();
         String id = activeAccount("investor1", "USD");
 
         postCash(bearer, id, cash("CREDIT", "DEPOSIT", "1000.00", "USD")).andExpect(status().isCreated());
@@ -42,7 +45,7 @@ class LedgerIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void overdraftIsRejected() throws Exception {
-        String bearer = AccountTestTokens.investorBearer("investor1");
+        String bearer = AccountTestTokens.adminBearer();
         String id = activeAccount("investor1", "USD");
         postCash(bearer, id, cash("CREDIT", "DEPOSIT", "100.00", "USD")).andExpect(status().isCreated());
 
@@ -53,7 +56,7 @@ class LedgerIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void postingToASuspendedAccountIsRejected() throws Exception {
-        String bearer = AccountTestTokens.investorBearer("investor1");
+        String bearer = AccountTestTokens.adminBearer();
         String id = activeAccount("investor1", "USD");
         transition(bearer, id, "suspend");
 
@@ -64,7 +67,7 @@ class LedgerIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void securityReceiptAndDeliveryDeriveThePosition() throws Exception {
-        String bearer = AccountTestTokens.investorBearer("investor1");
+        String bearer = AccountTestTokens.adminBearer();
         String id = activeAccount("investor1", "USD");
 
         postSecurity(bearer, id, """
@@ -82,7 +85,7 @@ class LedgerIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void deliveringMoreThanHeldIsRejected() throws Exception {
-        String bearer = AccountTestTokens.investorBearer("investor1");
+        String bearer = AccountTestTokens.adminBearer();
         String id = activeAccount("investor1", "USD");
         postSecurity(bearer, id, """
                 { "direction": "RECEIPT", "transactionType": "TRADE_SETTLEMENT", "instrumentId": "AAPL", "quantity": "50" }
@@ -97,7 +100,7 @@ class LedgerIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void idempotentReplayReturns200AndDoesNotDoublePost() throws Exception {
-        String bearer = AccountTestTokens.investorBearer("investor1");
+        String bearer = AccountTestTokens.adminBearer();
         String id = activeAccount("investor1", "USD");
         String body = """
                 { "direction": "CREDIT", "transactionType": "DEPOSIT", "amount": "1000.00", "currency": "USD",

@@ -41,7 +41,7 @@ route/page (server + client components)
 | `/executions`, `/executions/[internalId]` | Execution list + detail with amendment chain | authenticated (read) |
 | `/executions/new` | Capture a trade fill | **ADMIN** |
 | `/executions/[internalId]/correct`, `/cancel` | Append correction / cancellation | **ADMIN** |
-| `/accounts`, `/accounts/new`, `/accounts/[accountId]` | Accounts, balances, cash/security ledgers, lifecycle, post transactions | authenticated (owned) |
+| `/accounts`, `/accounts/new`, `/accounts/[accountId]` | Accounts, balances, cash/security ledgers; lifecycle actions and posting transactions are ADMIN-only | authenticated (owned) |
 | `/reference` | Instruments / currencies / exchanges (read-only) | **ADMIN** |
 | `/403` | Authorization-denied page | — |
 

@@ -25,3 +25,10 @@ export function canManageReferenceData(
 ): boolean {
   return isAdmin(session);
 }
+
+/** Cash/security ledger posts and account lifecycle changes require the ADMIN role. */
+export function canManageAccounts(
+  session: Pick<Session, "roles"> | null
+): boolean {
+  return isAdmin(session);
+}

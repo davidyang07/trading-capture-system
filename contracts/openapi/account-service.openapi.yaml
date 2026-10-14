@@ -56,48 +56,53 @@ paths:
         "404": { $ref: '#/components/responses/Problem' }
     put:
       tags: [accounts]
-      summary: Rename an account (scope account:admin)
+      summary: Rename an account (scope account:admin + role ADMIN)
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/UpdateAccountRequest' } } }
       responses:
         "200": { description: Updated, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "403": { $ref: '#/components/responses/Problem' }
         "404": { $ref: '#/components/responses/Problem' }
   /api/v1/accounts/{accountId}/activate:
     parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
     post:
       tags: [accounts]
-      summary: Activate a PENDING or SUSPENDED account (scope account:admin)
+      summary: Activate a PENDING or SUSPENDED account (scope account:admin + role ADMIN)
       responses:
         "200": { description: Activated, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "403": { $ref: '#/components/responses/Problem' }
         "409": { $ref: '#/components/responses/Problem' }
   /api/v1/accounts/{accountId}/suspend:
     parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
     post:
       tags: [accounts]
-      summary: Suspend an ACTIVE account (scope account:admin) — suspended accounts reject transactions
+      summary: Suspend an ACTIVE account (scope account:admin + role ADMIN) — suspended accounts reject transactions
       responses:
         "200": { description: Suspended, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "403": { $ref: '#/components/responses/Problem' }
         "409": { $ref: '#/components/responses/Problem' }
   /api/v1/accounts/{accountId}/close:
     parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
     post:
       tags: [accounts]
-      summary: Close an account (scope account:admin) — requires every balance to be zero
+      summary: Close an account (scope account:admin + role ADMIN) — requires every balance to be zero
       responses:
         "200": { description: Closed, content: { application/json: { schema: { $ref: '#/components/schemas/Account' } } } }
+        "403": { $ref: '#/components/responses/Problem' }
         "409": { $ref: '#/components/responses/Problem' }
   /api/v1/accounts/{accountId}/cash-transactions:
     parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
     post:
       tags: [ledger]
-      summary: Post a cash ledger row (scope account:balance; immutable; sufficient-funds for debits)
+      summary: Post a cash ledger row (scope account:balance + role ADMIN; immutable; sufficient-funds for debits)
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/PostCashTransactionRequest' } } }
       responses:
         "201": { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/CashTransaction' } } } }
         "200": { description: Idempotent replay of an existing row, content: { application/json: { schema: { $ref: '#/components/schemas/CashTransaction' } } } }
+        "403": { $ref: '#/components/responses/Problem' }
         "409": { $ref: '#/components/responses/Problem' }
     get:
       tags: [ledger]
@@ -111,13 +116,14 @@ paths:
     parameters: [ { name: accountId, in: path, required: true, schema: { type: string } } ]
     post:
       tags: [ledger]
-      summary: Post a security ledger row (scope account:balance; immutable; sufficient-position for deliveries)
+      summary: Post a security ledger row (scope account:balance + role ADMIN; immutable; sufficient-position for deliveries)
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/PostSecurityTransactionRequest' } } }
       responses:
         "201": { description: Posted, content: { application/json: { schema: { $ref: '#/components/schemas/SecurityTransaction' } } } }
         "200": { description: Idempotent replay of an existing row, content: { application/json: { schema: { $ref: '#/components/schemas/SecurityTransaction' } } } }
+        "403": { $ref: '#/components/responses/Problem' }
         "409": { $ref: '#/components/responses/Problem' }
     get:
       tags: [ledger]

@@ -89,23 +89,36 @@ class RestScenariosTest extends FullSystemTest {
     @Test
     void accountAcceptsADepositAndRejectsAnOverdraft() {
         String investor1 = stack.userToken("investor1");
+        String admin = stack.userToken("tcs-admin");
         String accountId = stack.post(FullSystemHarness.ACCOUNT + "/api/v1/accounts", investor1,
                 Map.of("accountName", "FS-" + UUID.randomUUID(),
                         "accountType", "CASH", "baseCurrency", "USD"))
                 .at("/accountId").asText();
         assertThat(accountId).isNotBlank();
 
-        FullSystemHarness.Response deposit = stack.post(
+        // Lifecycle transitions and ledger posts are ADMIN-only: the owner cannot activate the
+        // account or mint cash into it.
+        assertThat(stack.post(FullSystemHarness.ACCOUNT + "/api/v1/accounts/" + accountId + "/activate",
+                investor1, Map.of()).status()).isEqualTo(403);
+        assertThat(stack.post(FullSystemHarness.ACCOUNT + "/api/v1/accounts/" + accountId + "/activate",
+                admin, Map.of()).status()).isEqualTo(200);
+        assertThat(stack.post(
                 FullSystemHarness.ACCOUNT + "/api/v1/accounts/" + accountId + "/cash-transactions",
                 investor1, Map.of("direction", "CREDIT", "transactionType", "DEPOSIT",
+                        "amount", "1000.00", "currency", "USD")).status()).isEqualTo(403);
+
+        FullSystemHarness.Response deposit = stack.post(
+                FullSystemHarness.ACCOUNT + "/api/v1/accounts/" + accountId + "/cash-transactions",
+                admin, Map.of("direction", "CREDIT", "transactionType", "DEPOSIT",
                         "amount", "1000.00", "currency", "USD"));
         assertThat(deposit.status()).isIn(200, 201);
 
         FullSystemHarness.Response overdraft = stack.post(
                 FullSystemHarness.ACCOUNT + "/api/v1/accounts/" + accountId + "/cash-transactions",
-                investor1, Map.of("direction", "DEBIT", "transactionType", "WITHDRAWAL",
+                admin, Map.of("direction", "DEBIT", "transactionType", "WITHDRAWAL",
                         "amount", "5000.00", "currency", "USD"));
-        assertThat(overdraft.status()).isEqualTo(422);
+        assertThat(overdraft.status()).isEqualTo(409);
+        assertThat(overdraft.at("/errorCode").asText()).isEqualTo("INSUFFICIENT_FUNDS");
     }
 
     // --- Scenario 5: reference-data enrichment -------------------------------------------

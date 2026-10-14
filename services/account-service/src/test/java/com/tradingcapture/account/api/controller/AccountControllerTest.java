@@ -28,10 +28,12 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -149,10 +151,27 @@ class AccountControllerTest extends ControllerSliceTestSupport {
 
     @Test
     void lifecycleTransitionRequiresAdminScope() throws Exception {
-        var balanceOnly = TestJwts.jwt("sub-x", "investor1",
-                List.of("INVESTOR"), "account:balance", List.of(AccountTestTokens.AUDIENCE));
+        var balanceOnly = TestJwts.jwt("sub-x", "tcs-admin",
+                List.of("ADMIN"), "account:balance", List.of(AccountTestTokens.AUDIENCE));
 
         mockMvc.perform(post("/api/v1/accounts/ACC-1/activate").with(auth(balanceOnly)))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void investorWithTheAdminScopeStillCannotTransitionOrRename() throws Exception {
+        // Every admin-web user token carries account:admin; the ADMIN role is what authorizes.
+        var investor = AccountTestTokens.investorJwt("investor1");
+
+        for (String action : List.of("activate", "suspend", "close")) {
+            mockMvc.perform(post("/api/v1/accounts/ACC-1/" + action).with(auth(investor)))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(put("/api/v1/accounts/ACC-1").with(auth(investor))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"accountName\": \"Renamed\" }"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(accountService);
     }
 }

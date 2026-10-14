@@ -38,8 +38,11 @@ import org.springframework.validation.annotation.Validated;
 
 /**
  * Ledger posts, ledger history, and ledger-derived balances. All require {@code account:balance}
- * (held by investors, admins, and the trading-service machine client). Ownership isolation is
- * enforced in the service (unowned accounts answer 404). Posts to a non-ACTIVE account are 409.
+ * (held by investors, admins, and the trading-service machine client). Posting a ledger row
+ * additionally requires the realm {@code ADMIN} role: a ledger post creates or moves cash and
+ * securities, so investors (and machine clients) may read their ledgers and balances but never
+ * write them. Ownership isolation is enforced in the service (unowned accounts answer 404).
+ * Posts to a non-ACTIVE account are 409.
  */
 @RestController
 @RequestMapping("/api/v1/accounts/{accountId}")
@@ -62,9 +65,10 @@ public class AccountLedgerController {
     }
 
     @PostMapping("/cash-transactions")
-    @PreAuthorize("hasAuthority('SCOPE_account:balance')")
+    @PreAuthorize("hasAuthority('SCOPE_account:balance') and hasRole('ADMIN')")
     @Operation(summary = "Post a cash ledger row (immutable; sufficient-funds enforced for debits)")
     @ApiResponse(responseCode = "201", description = "Posted")
+    @ApiResponse(responseCode = "403", description = "Caller lacks the ADMIN role")
     @ApiResponse(responseCode = "200", description = "Idempotent replay of an existing row")
     @ApiResponse(responseCode = "409", description = "Insufficient funds / account not active / concurrent modification")
     public ResponseEntity<CashTransactionResponse> postCash(Authentication authentication,
@@ -89,9 +93,10 @@ public class AccountLedgerController {
     }
 
     @PostMapping("/security-transactions")
-    @PreAuthorize("hasAuthority('SCOPE_account:balance')")
+    @PreAuthorize("hasAuthority('SCOPE_account:balance') and hasRole('ADMIN')")
     @Operation(summary = "Post a security ledger row (immutable; sufficient-position enforced for deliveries)")
     @ApiResponse(responseCode = "201", description = "Posted")
+    @ApiResponse(responseCode = "403", description = "Caller lacks the ADMIN role")
     @ApiResponse(responseCode = "200", description = "Idempotent replay of an existing row")
     @ApiResponse(responseCode = "409", description = "Insufficient position / account not active / concurrent modification")
     public ResponseEntity<SecurityTransactionResponse> postSecurity(Authentication authentication,

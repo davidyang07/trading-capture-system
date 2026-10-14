@@ -26,6 +26,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -56,7 +57,7 @@ class AccountLedgerControllerTest extends ControllerSliceTestSupport {
         when(ledgerService.postCash(any(), eq("ACC-1"), any())).thenReturn(LedgerPost.created(cash()));
 
         mockMvc.perform(post("/api/v1/accounts/ACC-1/cash-transactions")
-                        .with(auth(AccountTestTokens.investorJwt("investor1")))
+                        .with(auth(AccountTestTokens.adminJwt()))
                         .contentType(MediaType.APPLICATION_JSON).content(CASH_BODY))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.transactionRef").value("CT-1"))
@@ -68,7 +69,7 @@ class AccountLedgerControllerTest extends ControllerSliceTestSupport {
         when(ledgerService.postCash(any(), eq("ACC-1"), any())).thenReturn(LedgerPost.replayed(cash()));
 
         mockMvc.perform(post("/api/v1/accounts/ACC-1/cash-transactions")
-                        .with(auth(AccountTestTokens.investorJwt("investor1")))
+                        .with(auth(AccountTestTokens.adminJwt()))
                         .contentType(MediaType.APPLICATION_JSON).content(CASH_BODY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.transactionRef").value("CT-1"));
@@ -81,7 +82,7 @@ class AccountLedgerControllerTest extends ControllerSliceTestSupport {
 
         String debitBody = CASH_BODY.replace("CREDIT", "DEBIT").replace("DEPOSIT", "WITHDRAWAL");
         mockMvc.perform(post("/api/v1/accounts/ACC-1/cash-transactions")
-                        .with(auth(AccountTestTokens.investorJwt("investor1")))
+                        .with(auth(AccountTestTokens.adminJwt()))
                         .contentType(MediaType.APPLICATION_JSON).content(debitBody))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errorCode").value("INSUFFICIENT_FUNDS"));
@@ -91,7 +92,7 @@ class AccountLedgerControllerTest extends ControllerSliceTestSupport {
     void negativeAmountIsRejected() throws Exception {
         String badBody = CASH_BODY.replace("1000.00", "-5.00");
         mockMvc.perform(post("/api/v1/accounts/ACC-1/cash-transactions")
-                        .with(auth(AccountTestTokens.investorJwt("investor1")))
+                        .with(auth(AccountTestTokens.adminJwt()))
                         .contentType(MediaType.APPLICATION_JSON).content(badBody))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("VALIDATION_FAILED"));
@@ -99,12 +100,35 @@ class AccountLedgerControllerTest extends ControllerSliceTestSupport {
 
     @Test
     void postingRequiresTheBalanceScope() throws Exception {
-        var noScope = com.tradingcapture.testsupport.TestJwts.jwt("sub-x", "investor1",
-                List.of("INVESTOR"), "account:admin", List.of(AccountTestTokens.AUDIENCE));
+        var noScope = com.tradingcapture.testsupport.TestJwts.jwt("sub-x", "tcs-admin",
+                List.of("ADMIN"), "account:admin", List.of(AccountTestTokens.AUDIENCE));
 
         mockMvc.perform(post("/api/v1/accounts/ACC-1/cash-transactions").with(auth(noScope))
                         .contentType(MediaType.APPLICATION_JSON).content(CASH_BODY))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void investorCannotPostCashEvenToTheirOwnAccount() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts/ACC-1/cash-transactions")
+                        .with(auth(AccountTestTokens.investorJwt("investor1")))
+                        .contentType(MediaType.APPLICATION_JSON).content(CASH_BODY))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(ledgerService);
+    }
+
+    @Test
+    void investorCannotPostSecurities() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts/ACC-1/security-transactions")
+                        .with(auth(AccountTestTokens.investorJwt("investor1")))
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                                { "direction": "RECEIPT", "transactionType": "TRANSFER_IN",
+                                  "instrumentId": "AAPL", "quantity": "1000" }
+                                """))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(ledgerService);
     }
 
     @Test

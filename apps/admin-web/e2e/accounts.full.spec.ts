@@ -1,6 +1,16 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
+
 import { login } from "./helpers";
-import { INVESTOR1 } from "./credentials";
+import { ADMIN, INVESTOR1 } from "./credentials";
+
+// PrimeReact dropdowns render a labelled textbox plus a hidden labelled <select>; drive the
+// textbox by keyboard (as workflows.spec.ts does) so the dialog's enter animation cannot eat a click.
+async function choose(scope: Locator, label: string, option: string): Promise<void> {
+  const control = scope.getByRole("textbox", { name: label });
+  await control.focus();
+  await control.press("ArrowDown");
+  await scope.page().getByRole("option", { name: option, exact: true }).click();
+}
 
 test.describe("accounts workflow (full stack)", () => {
   test.skip(
@@ -8,7 +18,7 @@ test.describe("accounts workflow (full stack)", () => {
     "Requires the account service (E2E_FULL_STACK=1)"
   );
 
-  test("investor views an owned account and posts a balanced cash transaction pair", async ({
+  test("investor views an owned account but cannot post to its ledger", async ({
     page,
   }) => {
     await login(page, INVESTOR1());
@@ -21,18 +31,30 @@ test.describe("accounts workflow (full stack)", () => {
     await page.getByRole("link", { name: /^ACC-/ }).first().click();
     await page.waitForURL(/\/accounts\/.+/);
 
+    await page.getByRole("tab", { name: "Cash" }).click();
+    await expect(
+      page.getByRole("button", { name: /post cash transaction/i })
+    ).toHaveCount(0);
+  });
+
+  test("administrator posts a balanced cash transaction pair on an investor account", async ({
+    page,
+  }) => {
+    await login(page, ADMIN());
+    await page.goto("/accounts/ACC-SEED-INV1");
+
     // Post a uniquely described deposit through the Cash tab.
     const runRef = `phase10-${Date.now()}`;
     await page.getByRole("tab", { name: "Cash" }).click();
     await page.getByRole("button", { name: /post cash transaction/i }).click();
-    await page.getByLabel("Direction").click();
-    await page.getByRole("option", { name: "Credit" }).click();
-    await page.getByLabel("Type").click();
-    await page.getByRole("option", { name: "Deposit" }).click();
-    await page.getByRole("textbox", { name: "Amount" }).fill("17.25");
-    await page.getByRole("textbox", { name: "Currency" }).fill("USD");
-    await page.getByRole("textbox", { name: "Description" }).fill(runRef);
-    await page.getByRole("button", { name: /^Post$/ }).click();
+    let dialog = page.getByRole("dialog", { name: "Post cash transaction" });
+    await choose(dialog, "Direction", "Credit");
+    await choose(dialog, "Type", "Deposit");
+    await dialog.getByRole("textbox", { name: "Amount" }).fill("17.25");
+    await dialog.getByRole("textbox", { name: "Currency" }).fill("USD");
+    await dialog.getByRole("textbox", { name: "Description" }).fill(runRef);
+    await dialog.getByRole("button", { name: /^Post$/ }).click();
+    await expect(dialog).toBeHidden();
 
     // The immutable ledger refreshes and shows the new row.
     await expect(page.getByText("Deposit").first()).toBeVisible();
@@ -40,16 +62,16 @@ test.describe("accounts workflow (full stack)", () => {
     // Compensate with an equal withdrawal so the shared seed account's balance is
     // restored. The audit rows intentionally remain immutable and are uniquely described.
     await page.getByRole("button", { name: /post cash transaction/i }).click();
-    await page.getByLabel("Direction").click();
-    await page.getByRole("option", { name: "Debit" }).click();
-    await page.getByLabel("Type").click();
-    await page.getByRole("option", { name: "Withdrawal" }).click();
-    await page.getByRole("textbox", { name: "Amount" }).fill("17.25");
-    await page.getByRole("textbox", { name: "Currency" }).fill("USD");
-    await page
+    dialog = page.getByRole("dialog", { name: "Post cash transaction" });
+    await choose(dialog, "Direction", "Debit");
+    await choose(dialog, "Type", "Withdrawal");
+    await dialog.getByRole("textbox", { name: "Amount" }).fill("17.25");
+    await dialog.getByRole("textbox", { name: "Currency" }).fill("USD");
+    await dialog
       .getByRole("textbox", { name: "Description" })
       .fill(`${runRef}-cleanup`);
-    await page.getByRole("button", { name: /^Post$/ }).click();
+    await dialog.getByRole("button", { name: /^Post$/ }).click();
+    await expect(dialog).toBeHidden();
     await expect(page.getByText("Withdrawal").first()).toBeVisible();
   });
 

@@ -15,13 +15,13 @@ class BatchValidationIntegrationTest extends IntegrationTestSupport {
 
     @Test
     void mixedBatchYieldsIndependentPerItemVerdicts() throws Exception {
-        String investor1 = AccountTestTokens.investorBearer("investor1");
-        String funded = createAccount(investor1, "Cash", "USD");
-        transition(investor1, funded, "activate");
-        postCash(investor1, funded, """
+        String admin = AccountTestTokens.adminBearer();
+        String funded = createAccount(AccountTestTokens.investorBearer("investor1"), "Cash", "USD");
+        transition(admin, funded, "activate");
+        postCash(admin, funded, """
                 { "direction": "CREDIT", "transactionType": "DEPOSIT", "amount": "1000.00", "currency": "USD" }
                 """).andExpect(status().isCreated());
-        postSecurity(investor1, funded, """
+        postSecurity(admin, funded, """
                 { "direction": "RECEIPT", "transactionType": "TRADE_SETTLEMENT", "instrumentId": "AAPL", "quantity": "500" }
                 """).andExpect(status().isCreated());
 

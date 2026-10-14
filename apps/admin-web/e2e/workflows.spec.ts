@@ -32,7 +32,7 @@ async function fillOrder(page: Page): Promise<void> {
 }
 
 test.describe("deterministic investor and administrator workflows", () => {
-  test("investor views an owned account, balances, and positions but not lifecycle controls", async ({
+  test("investor views an owned account, balances, and positions but not lifecycle or posting controls", async ({
     page,
   }) => {
     await mockDashboard(page);
@@ -59,13 +59,11 @@ test.describe("deterministic investor and administrator workflows", () => {
     await expect(page.getByText("AAPL")).toBeVisible();
     await expect(page.getByRole("button", { name: /activate|suspend|close/i })).toHaveCount(0);
 
+    // Ledger posts are ADMIN-only (the account service answers 403), so investors get no controls.
     await page.getByRole("tab", { name: "Cash" }).click();
-    await page.getByRole("button", { name: "Post cash transaction" }).click();
-    const dialog = page.getByRole("dialog", { name: "Post cash transaction" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.locator(":focus")).toHaveCount(1);
-    await page.keyboard.press("Escape");
-    await expect(dialog).toBeHidden();
+    await expect(page.getByRole("button", { name: "Post cash transaction" })).toHaveCount(0);
+    await page.getByRole("tab", { name: "Securities" }).click();
+    await expect(page.getByRole("button", { name: "Post security transaction" })).toHaveCount(0);
   });
 
   test("investor cannot learn whether another investor account exists", async ({ page }) => {
@@ -206,6 +204,9 @@ test.describe("deterministic investor and administrator workflows", () => {
       if (url.pathname.endsWith("/balances")) {
         return json(route, { accountId: ownedAccount.accountId, cashBalances: [], securityPositions: [] });
       }
+      if (url.pathname.endsWith("-transactions")) {
+        return json(route, emptyPage);
+      }
       return json(route, { ...ownedAccount, status });
     });
 
@@ -217,6 +218,14 @@ test.describe("deterministic investor and administrator workflows", () => {
     await page.goto(`/accounts/${ownedAccount.accountId}`);
     await page.getByRole("button", { name: "Suspend" }).click();
     await expect(page.getByText("Suspended")).toBeVisible();
+
+    await page.getByRole("tab", { name: "Cash" }).click();
+    await page.getByRole("button", { name: "Post cash transaction" }).click();
+    const dialog = page.getByRole("dialog", { name: "Post cash transaction" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.locator(":focus")).toHaveCount(1);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
 
     await page.goto("/executions/new");
     await page.getByRole("button", { name: "Capture execution" }).click();
