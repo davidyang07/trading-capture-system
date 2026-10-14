@@ -111,6 +111,16 @@ corepack pnpm --filter admin-web test:e2e      # Playwright (needs Keycloak up)
   containerized trading/account/enrichment services started by `scripts/full-stack-up.ps1 -Build`.
   The gate is infrastructure-explicit; default tests do not share or mutate backend data.
 
+## Design system
+
+[`DESIGN.md`](DESIGN.md) is the visual spec: a Stripe-derived look (indigo `#533afd`, navy ink,
+Inter, pill buttons, hairline panels on a soft canvas) with IBM Carbon's data-table rules
+(40px rows, one line per row, right-aligned tabular numbers, pagination bottom-right). Its
+front matter holds the tokens; `src/style/global.scss` mirrors them as `--tcs-*` CSS
+variables, and `src/style/primereact.scss` maps PrimeReact (Lara indigo) onto them. Change
+a token in `DESIGN.md` first, then in `global.scss`, and lint the spec with
+`npx @google/design.md lint DESIGN.md`.
+
 ## Accessibility
 
 Semantic landmarks, a skip link, one `<h1>` per page, labelled inputs with
