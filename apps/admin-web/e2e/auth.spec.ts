@@ -11,6 +11,23 @@ test.describe("authentication & authorization", () => {
     ).toBeVisible();
   });
 
+  test("visitor sees the public landing page and signs in from it", async ({ page }) => {
+    await page.goto("/");
+    await expect(
+      page.getByRole("heading", { level: 1, name: /capture every trade/i })
+    ).toBeVisible();
+    await page.getByRole("button", { name: /sign in to the console/i }).click();
+    await page.waitForURL(/\/realms\/tcs\/protocol\/openid-connect\/auth/);
+    await page.locator("#username").fill(INVESTOR1().username);
+    await page.locator("#password").fill(INVESTOR1().password);
+    await page.locator("#kc-login, input[type=submit]").first().click();
+    await page.waitForURL(/\/dashboard/);
+
+    // Signed in, the root goes straight to the dashboard instead of the landing page.
+    await page.goto("/");
+    await page.waitForURL(/\/dashboard/);
+  });
+
   test("expired-session state is announced safely", async ({ page }) => {
     await page.goto("/login?error=SessionRequired");
     await expect(
@@ -51,6 +68,34 @@ test.describe("authentication & authorization", () => {
     // Navigating back into the app requires re-authentication.
     await page.goto("/dashboard");
     await page.waitForURL(/\/login/);
+  });
+
+  test("a session cookie re-set by a request racing the logout stays signed out", async ({
+    page,
+    context,
+  }) => {
+    await login(page, INVESTOR1());
+    const sessionCookies = (await context.cookies()).filter((c) =>
+      c.name.startsWith("authjs.session-token")
+    );
+    expect(sessionCookies.length).toBeGreaterThan(0);
+    await logout(page);
+
+    // A prefetch sent just before logout can answer after it and re-set the session cookie
+    // (Auth.js re-issues it on every read). Replay that deterministically.
+    await context.addCookies(sessionCookies);
+    await page.goto("/dashboard");
+    await page.waitForURL(/\/login\?callbackUrl=/);
+    expect((await page.request.get("/api/proxy/trading/api/v1/orders")).status()).toBe(401);
+
+    // Signing in again clears the marker and starts a fresh session.
+    await page.getByRole("button", { name: /sign in with keycloak/i }).click();
+    await page.waitForURL(/\/realms\/tcs\/protocol\/openid-connect\/auth/);
+    await page.locator("#username").fill(INVESTOR1().username);
+    await page.locator("#password").fill(INVESTOR1().password);
+    await page.locator("#kc-login, input[type=submit]").first().click();
+    await page.waitForURL(/\/dashboard/);
+    expect((await page.request.get("/api/proxy/trading/api/v1/orders")).status()).toBe(200);
   });
 
   test("open-redirect callbackUrl is neutralized", async ({ page }) => {

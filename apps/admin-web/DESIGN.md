@@ -91,6 +91,24 @@ typography:
     fontWeight: 500
     lineHeight: 1.0
     letterSpacing: 0
+  display:
+    fontFamily: "'Inter var', Inter, system-ui, sans-serif"
+    fontSize: 68px
+    fontWeight: 300
+    lineHeight: 1.04
+    letterSpacing: -1.7px
+  display-section:
+    fontFamily: "'Inter var', Inter, system-ui, sans-serif"
+    fontSize: 42px
+    fontWeight: 300
+    lineHeight: 1.12
+    letterSpacing: -0.84px
+  lead:
+    fontFamily: "'Inter var', Inter, system-ui, sans-serif"
+    fontSize: 18px
+    fontWeight: 400
+    lineHeight: 1.6
+    letterSpacing: 0
 
 rounded:
   xs: 4px
@@ -399,9 +417,33 @@ White, `{rounded.lg}`, Level 2 shadow, 24px padding, title 18px/600 ink, mask `r
 Primary action bottom-left (form order), Escape and the close icon dismiss.
 
 ### Login
-The one non-dense surface: a centred 400px white card (`{rounded.lg}`, Level 2) on
+A non-dense surface: a centred 400px white card (`{rounded.lg}`, Level 2) on
 `{colors.canvas-soft}` with a faint indigo wash, logo, title in `{typography.page-title}` and a
 full-width primary pill.
+
+### Landing (`/`, signed out)
+The public front door, and the one place the marketing side of the source applies. Signed-in users
+never see it: the route sends them to the dashboard.
+- **Structure:** sticky translucent top bar (logo, section links, "Sign in" pill) → centred hero →
+  facts strip → Platform cards → How it works → Controls → Roles → closing call to action → footer.
+  Content width 1160px; sections 104px apart vertically (72px on phones), alternating white and
+  `{colors.canvas-soft}` bands separated by hairlines.
+- **Hero:** eyebrow pill, headline in `{typography.display}` (scales down to 38px) with the second
+  sentence in `{colors.primary}` — the only place indigo is used for text that is not a link —
+  `{typography.lead}` paragraph, a primary and a secondary pill (44px tall), then a static slice of
+  the executions console. The slice follows the table rules above and keeps its pagination row so the
+  floating event card covers only empty space. It is `role="img"` with a text description.
+- **Section heads:** a 14px/600 indigo kicker, the title in `{typography.display-section}`, a 17px
+  description; centred, max 680px. Headings use `text-wrap: balance`.
+- **Cards:** white, hairline, `{rounded.lg}`, 28px × 24px padding, a 40px icon chip, a 17px/600 title;
+  hover lifts 2px with Level 2.
+- **Depth:** the console slice alone gets a deeper shadow
+  (`0 32px 64px -16px rgba(13,37,61,0.18), 0 16px 32px -16px rgba(0,55,112,0.16)`); everything else
+  stays at Levels 0–2. Background washes are soft radial indigo at ≤ 12% opacity, never a mesh.
+- **Copy:** describe what the platform does. No invented metrics, customer logos or testimonials.
+- **Widths:** laptop only, like the console. Designed for 1280px and up; between 1024px and 1099px the
+  platform cards go to two columns and the console slice drops its Order and Time columns. There is
+  no tablet or phone layout.
 
 ## Number & text formatting
 - Decimals are strings end to end (ADR-0014); format with grouping separators, keep the scale the API
@@ -447,6 +489,7 @@ full-width primary pill.
   maps the prominent surfaces (buttons, inputs, tables, tabs, paginator, dialog) onto these tokens.
 - Shell and pages: `src/components/Layout/*.scss`, `src/components/Table/Table.scss`,
   `src/style/app.scss`.
+- Landing: `src/components/Landing/Landing.tsx` and `src/style/landing.scss` (scoped under `.landing`).
 
 ## Iteration guide
 1. Change one component at a time and update its section here.

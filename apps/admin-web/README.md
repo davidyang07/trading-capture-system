@@ -27,7 +27,12 @@ route/page (server + client components)
   before expiry; a failed refresh marks the session `RefreshAccessTokenError`, and the proxy
   returns 401 so the UI re-authenticates.
 - **Federated logout:** `GET /api/auth/logout` clears the session cookie and redirects to the
-  Keycloak end-session endpoint (with `id_token_hint`), then back to `/login`.
+  Keycloak end-session endpoint (with `id_token_hint`), then back to `/login`. Auth.js re-issues
+  the session cookie on every session read, so a request still in flight at logout (a route
+  prefetch) can set it again; logout therefore also sets an httpOnly `tcs.session-ended` marker,
+  and the middleware, the BFF proxy and the login/landing pages treat any session as signed out
+  while it is present. Signing in again clears the marker and any leftover session cookie
+  (`src/auth/session-end.ts`, `src/auth/sign-in.ts`).
 - **Authorization is UX-only here.** Role-aware nav and route guards (`middleware.ts`) improve
   UX; the services enforce every scope/role/ownership rule (see `../../SECURITY.md`).
 
@@ -35,6 +40,7 @@ route/page (server + client components)
 
 | Route | Purpose | Access |
 |---|---|---|
+| `/` | Landing page; its buttons start the Keycloak sign-in. Signed-in users are sent to `/dashboard` | public |
 | `/login` | Keycloak sign-in (Auth Code + PKCE) | public |
 | `/dashboard` | Role-aware activity summary | authenticated |
 | `/orders`, `/orders/new`, `/orders/[orderId]` | Order list, create, detail + edit/delete (NEW-only) | authenticated |

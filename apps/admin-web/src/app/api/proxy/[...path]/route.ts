@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getToken } from "next-auth/jwt";
+import { SESSION_ENDED_COOKIE } from "@/auth/session-end";
 import { isServiceKey, serviceBaseUrl } from "@/server/services";
 
 // The proxy attaches the bearer token and forwards to internal services, so it must run
@@ -78,8 +79,9 @@ async function handle(
   }
 
   const { accessToken, error } = await readAccessToken(req);
-  if (error === "RefreshAccessTokenError" || !accessToken) {
-    // Session missing or its refresh failed — force the browser to re-authenticate.
+  const ended = req.cookies.has(SESSION_ENDED_COOKIE);
+  if (ended || error === "RefreshAccessTokenError" || !accessToken) {
+    // Session missing, ended by logout, or its refresh failed — force re-authentication.
     return problem(401, "UNAUTHORIZED", "Not authenticated");
   }
 

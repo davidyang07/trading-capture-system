@@ -1,6 +1,9 @@
 import Image from "next/image";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { auth, signIn } from "@/auth";
+import { auth } from "@/auth";
+import { SESSION_ENDED_COOKIE } from "@/auth/session-end";
+import { beginSignIn } from "@/auth/sign-in";
 import { sanitizeRelativePath } from "@/lib/redirect";
 
 export const metadata = { title: "Sign in · Trading Capture System" };
@@ -13,15 +16,17 @@ export default async function LoginPage({
   const resolvedSearchParams = await searchParams;
   const callbackUrl = sanitizeRelativePath(resolvedSearchParams.callbackUrl);
 
-  // Already authenticated with a healthy session — go straight in.
+  // Already authenticated with a healthy session — go straight in. A session cookie that
+  // outlived a logout (see src/auth/session-end.ts) does not count.
   const session = await auth();
-  if (session && !session.error) {
+  const ended = (await cookies()).has(SESSION_ENDED_COOKIE);
+  if (session && !session.error && !ended) {
     redirect(callbackUrl);
   }
 
   async function login() {
     "use server";
-    await signIn("keycloak", { redirectTo: callbackUrl });
+    await beginSignIn(callbackUrl);
   }
 
   const expired = resolvedSearchParams.error || session?.error;

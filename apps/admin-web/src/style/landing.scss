@@ -1,0 +1,775 @@
+// Public landing page (DESIGN.md › Landing). The one marketing-style surface: larger display type and
+// generous spacing on the same tokens as the console. Everything is scoped under .landing.
+
+html:has(.landing) {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html:has(.landing) {
+    scroll-behavior: auto;
+  }
+}
+
+.landing {
+  min-height: 100vh;
+  background: var(--tcs-canvas);
+  color: var(--tcs-ink-secondary);
+  font-size: 15px;
+  line-height: 1.55;
+
+  h1,
+  h2,
+  h3 {
+    color: var(--tcs-ink);
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  section[id] {
+    scroll-margin-top: 80px;
+  }
+
+  main:focus {
+    outline: none;
+  }
+}
+
+.landing-nowrap {
+  white-space: nowrap;
+}
+
+.landing-container {
+  width: 100%;
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+// --- Buttons (pill, DESIGN.md › Buttons; 44px on this surface) ------------------------------------
+
+.landing-signin-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.landing-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 20px;
+  border-radius: var(--tcs-radius-pill);
+  font-family: var(--tcs-font);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+
+  .pi {
+    font-size: 13px;
+    transition: transform 0.15s ease;
+  }
+
+  &:hover .pi-arrow-right {
+    transform: translateX(2px);
+  }
+}
+
+.landing-btn-primary {
+  background: var(--tcs-primary);
+  border: 1px solid var(--tcs-primary);
+  color: var(--tcs-on-primary);
+
+  &:hover {
+    background: var(--tcs-primary-deep);
+    border-color: var(--tcs-primary-deep);
+  }
+
+  &:active {
+    background: var(--tcs-primary-press);
+    border-color: var(--tcs-primary-press);
+  }
+}
+
+.landing-btn-secondary {
+  background: var(--tcs-canvas);
+  border: 1px solid var(--tcs-primary);
+  color: var(--tcs-primary);
+
+  &:hover {
+    background: var(--tcs-primary-tint);
+    color: var(--tcs-primary-deep);
+  }
+}
+
+.landing-btn-sm {
+  height: 36px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+// --- Header ----------------------------------------------------------------------------------------
+
+.landing-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--tcs-hairline);
+}
+
+.landing-header-inner {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  height: 64px;
+
+  > .landing-signin-form {
+    margin-left: auto;
+  }
+}
+
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--tcs-ink);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.1px;
+}
+
+.landing-brand-quiet {
+  font-size: 14px;
+  color: var(--tcs-ink-secondary);
+}
+
+.landing-nav {
+  display: flex;
+  gap: 28px;
+
+  a {
+    color: var(--tcs-ink-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: var(--tcs-ink);
+    }
+  }
+}
+
+// --- Hero ------------------------------------------------------------------------------------------
+
+.landing-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 96px 0 112px;
+  background:
+    radial-gradient(48% 52% at 50% 0%, rgba(83, 58, 253, 0.12), transparent 72%),
+    radial-gradient(30% 40% at 100% 30%, rgba(83, 58, 253, 0.05), transparent 70%),
+    linear-gradient(180deg, var(--tcs-canvas) 50%, var(--tcs-canvas-soft) 100%);
+}
+
+.landing-hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 860px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.landing-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--tcs-hairline);
+  border-radius: var(--tcs-radius-pill);
+  background: var(--tcs-canvas);
+  box-shadow: var(--tcs-shadow-1);
+  color: var(--tcs-ink-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.landing-eyebrow-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--tcs-radius-pill);
+  background: var(--tcs-primary);
+  box-shadow: 0 0 0 3px var(--tcs-primary-tint);
+}
+
+.landing-hero-copy h1 {
+  margin-top: 24px;
+  font-size: clamp(38px, 5.4vw, 68px);
+  font-weight: 300;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+
+  span {
+    display: block;
+    color: var(--tcs-primary);
+  }
+}
+
+.landing-lead {
+  margin-top: 24px;
+  max-width: 620px;
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--tcs-ink-secondary);
+}
+
+.landing-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 36px;
+}
+
+.landing-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 20px;
+  font-size: 13px;
+  color: var(--tcs-ink-mute);
+
+  .pi {
+    font-size: 12px;
+  }
+}
+
+// --- Hero preview: a static slice of the console ---------------------------------------------------
+
+.landing-preview {
+  position: relative;
+  max-width: 1000px;
+  margin: 72px auto 0;
+}
+
+.landing-preview-window {
+  background: var(--tcs-canvas);
+  border: 1px solid var(--tcs-hairline);
+  border-radius: var(--tcs-radius-lg);
+  box-shadow:
+    0 32px 64px -16px rgba(13, 37, 61, 0.18),
+    0 16px 32px -16px rgba(0, 55, 112, 0.16);
+  overflow: hidden;
+}
+
+.landing-preview-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--tcs-hairline);
+}
+
+.landing-preview-title {
+  color: var(--tcs-ink);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.landing-preview-sub {
+  margin-top: 2px;
+  color: var(--tcs-ink-mute);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-preview-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: var(--tcs-radius-pill);
+  background: var(--tcs-primary);
+  color: var(--tcs-on-primary);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+
+  .pi {
+    font-size: 10px;
+  }
+}
+
+.landing-preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+
+  th,
+  td {
+    height: 40px;
+    padding: 0 16px;
+    text-align: left;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--tcs-hairline);
+  }
+
+  th {
+    color: var(--tcs-ink);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  td {
+    color: var(--tcs-ink-secondary);
+  }
+
+  tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
+  .id {
+    color: var(--tcs-primary);
+    font-weight: 500;
+  }
+
+  .num {
+    text-align: right;
+  }
+}
+
+.landing-preview-pager {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  height: 48px;
+  padding: 0 16px;
+  border-top: 1px solid var(--tcs-hairline);
+  color: var(--tcs-ink-mute);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.landing-preview-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 28px;
+  border-radius: var(--tcs-radius-sm);
+  background: var(--tcs-primary-tint);
+  color: var(--tcs-primary-deep);
+  font-weight: 600;
+}
+
+.landing-float {
+  position: absolute;
+  background: var(--tcs-canvas);
+  border: 1px solid var(--tcs-hairline);
+  border-radius: var(--tcs-radius-lg);
+  box-shadow: var(--tcs-shadow-2);
+  padding: 12px 16px;
+}
+
+// Sits over the empty left end of the paginator row and spills past the window's corner.
+.landing-float-event {
+  left: -32px;
+  bottom: -28px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.landing-float-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--tcs-radius-pill);
+
+  &.tone-success {
+    background: var(--tcs-success-tint);
+    color: var(--tcs-success);
+  }
+
+  .pi {
+    font-size: 13px;
+    font-weight: 700;
+  }
+}
+
+.landing-float-title {
+  color: var(--tcs-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.landing-float-sub {
+  color: var(--tcs-ink-mute);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+// --- Facts strip -----------------------------------------------------------------------------------
+
+.landing-facts {
+  border-top: 1px solid var(--tcs-hairline);
+  border-bottom: 1px solid var(--tcs-hairline);
+  background: var(--tcs-canvas);
+}
+
+.landing-facts-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0 auto;
+}
+
+.landing-fact {
+  display: flex;
+  flex-direction: column-reverse; // value reads first visually; the label stays first for assistive tech
+  gap: 4px;
+  padding: 28px 24px;
+
+  & + & {
+    border-left: 1px solid var(--tcs-hairline);
+  }
+
+  dt {
+    color: var(--tcs-ink-mute);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  dd {
+    margin: 0;
+    color: var(--tcs-ink);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+  }
+}
+
+// --- Sections --------------------------------------------------------------------------------------
+
+.landing-section {
+  padding: 104px 0;
+}
+
+.landing-section-soft {
+  background: var(--tcs-canvas-soft);
+  border-top: 1px solid var(--tcs-hairline);
+  border-bottom: 1px solid var(--tcs-hairline);
+}
+
+.landing-section-head {
+  max-width: 680px;
+  margin: 0 auto 56px;
+  text-align: center;
+
+  h2 {
+    margin-top: 10px;
+    font-size: clamp(30px, 3.2vw, 42px);
+    font-weight: 300;
+    line-height: 1.12;
+    letter-spacing: -0.02em;
+  }
+
+  > p:not(.landing-kicker) {
+    margin-top: 16px;
+    font-size: 17px;
+    line-height: 1.6;
+  }
+}
+
+.landing-section-head-left {
+  margin: 0;
+  text-align: left;
+}
+
+.landing-kicker {
+  color: var(--tcs-primary);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.landing-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--tcs-radius-pill);
+  background: var(--tcs-primary-tint);
+  color: var(--tcs-primary-deep);
+
+  .pi {
+    font-size: 17px;
+  }
+}
+
+.landing-icon-sm {
+  flex-basis: 36px;
+  width: 36px;
+  height: 36px;
+
+  .pi {
+    font-size: 15px;
+  }
+}
+
+.landing-checks {
+  list-style: none;
+  margin: 20px 0 0;
+  padding: 0;
+
+  li {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-top: 8px;
+    font-size: 14px;
+    color: var(--tcs-ink-secondary);
+  }
+
+  .pi {
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--tcs-primary);
+  }
+}
+
+// --- Platform cards --------------------------------------------------------------------------------
+
+.landing-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.landing-card {
+  background: var(--tcs-canvas);
+  border: 1px solid var(--tcs-hairline);
+  border-radius: var(--tcs-radius-lg);
+  padding: 28px 24px;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+
+  &:hover {
+    border-color: var(--tcs-hairline-input);
+    box-shadow: var(--tcs-shadow-2);
+    transform: translateY(-2px);
+  }
+
+  h3 {
+    margin-top: 20px;
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.1px;
+  }
+
+  > p {
+    margin-top: 8px;
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+}
+
+// --- Steps -----------------------------------------------------------------------------------------
+
+.landing-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 32px;
+}
+
+.landing-step {
+  position: relative;
+
+  // The connector runs from this step's number to the next one.
+  &:not(:last-child)::after {
+    content: "";
+    position: absolute;
+    top: 18px;
+    left: 52px;
+    right: -20px;
+    height: 1px;
+    background: var(--tcs-hairline-input);
+  }
+
+  h3 {
+    margin-top: 20px;
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  p {
+    margin-top: 8px;
+    font-size: 14.5px;
+    line-height: 1.6;
+  }
+}
+
+.landing-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--tcs-radius-pill);
+  background: var(--tcs-canvas);
+  border: 1px solid var(--tcs-primary);
+  color: var(--tcs-primary);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+// --- Controls --------------------------------------------------------------------------------------
+
+.landing-split {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: 72px;
+  align-items: start;
+}
+
+.landing-controls {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 36px 40px;
+
+  li {
+    display: flex;
+    gap: 16px;
+  }
+
+  h3 {
+    font-size: 15.5px;
+    font-weight: 600;
+    line-height: 1.35;
+    margin-top: 7px;
+  }
+
+  p {
+    margin-top: 6px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+}
+
+// --- Roles -----------------------------------------------------------------------------------------
+
+.landing-roles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  max-width: 920px;
+  margin: 0 auto;
+}
+
+.landing-role {
+  padding: 32px;
+
+  .landing-checks {
+    margin-top: 24px;
+    border-top: 1px solid var(--tcs-hairline);
+    padding-top: 12px;
+  }
+}
+
+.landing-role-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  h3 {
+    margin: 0;
+  }
+
+  p {
+    margin-top: 2px;
+    font-size: 14px;
+    color: var(--tcs-ink-mute);
+  }
+}
+
+// --- Closing call to action ------------------------------------------------------------------------
+
+.landing-cta {
+  padding: 72px 32px;
+  text-align: center;
+  border: 1px solid var(--tcs-hairline);
+  border-radius: var(--tcs-radius-lg);
+  background:
+    radial-gradient(60% 120% at 50% 0%, rgba(83, 58, 253, 0.1), transparent 70%),
+    var(--tcs-canvas);
+
+  h2 {
+    font-size: clamp(30px, 3.2vw, 42px);
+    font-weight: 300;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    max-width: 520px;
+    margin: 14px auto 32px;
+    font-size: 17px;
+  }
+}
+
+// --- Footer ----------------------------------------------------------------------------------------
+
+.landing-footer {
+  border-top: 1px solid var(--tcs-hairline);
+  padding: 28px 0;
+  font-size: 13px;
+  color: var(--tcs-ink-mute);
+}
+
+.landing-footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+// --- Laptop widths ---------------------------------------------------------------------------------
+// The console is a laptop application: the page is designed for 1280px and up and stays tidy down to
+// 1024px. There is deliberately no tablet or phone layout.
+
+@media (max-width: 1099px) {
+  .landing-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .landing-preview-table .wide {
+    display: none;
+  }
+}
