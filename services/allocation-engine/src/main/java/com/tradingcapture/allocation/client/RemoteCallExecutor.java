@@ -109,6 +109,11 @@ public class RemoteCallExecutor {
      */
     private static DependencyCallException fromThrowable(String dependency, Throwable throwable) {
         for (Throwable cause = throwable; cause != null; cause = cause.getCause()) {
+            if (cause instanceof TokenAcquisitionException token) {
+                return new DependencyCallException(token.isTransient()
+                        ? DependencyFailureType.UNAVAILABLE : DependencyFailureType.UNAUTHORIZED,
+                        dependency, token.getMessage());
+            }
             if (cause instanceof SocketTimeoutException) {
                 return new DependencyCallException(DependencyFailureType.TIMEOUT, dependency, "read/connect timeout");
             }

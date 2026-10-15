@@ -22,9 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Optimistic-locking under real concurrency: two simultaneous debits against one account must
- * never overdraw it — the account's force-incremented version serializes them, so the loser
- * fails with a conflict and the ledger stays consistent (no double-spend).
+ * Ledger postings under real concurrency. The account row lock queues postings to one account:
+ * two simultaneous debits can never overdraw it (the second sees the first and is refused), and
+ * two simultaneous valid postings both succeed instead of one dying as a database deadlock.
  */
 class ConcurrencyIntegrationTest extends IntegrationTestSupport {
 
@@ -64,6 +64,47 @@ class ConcurrencyIntegrationTest extends IntegrationTestSupport {
             assertThat(debitCount).isEqualByComparingTo("1");
         } finally {
             executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentValidPostingsBothSucceed() throws Exception {
+        String admin = AccountTestTokens.adminBearer();
+        String id = createAccount(AccountTestTokens.investorBearer("investor1"), "Cash", "USD");
+        transition(admin, id, "activate");
+
+        AccessContext ctx = new AccessContext("admin1", true);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+        try {
+            List<Future<Throwable>> outcomes = List.of(
+                    executor.submit(() -> credit(ctx, id, start)),
+                    executor.submit(() -> credit(ctx, id, start)),
+                    executor.submit(() -> credit(ctx, id, start)),
+                    executor.submit(() -> credit(ctx, id, start)));
+            start.countDown();
+
+            for (Future<Throwable> outcome : outcomes) {
+                assertThat(outcome.get(30, TimeUnit.SECONDS)).isNull();
+            }
+            BigDecimal balance = jdbcTemplate.queryForObject(
+                    "SELECT SUM(amount) FROM cash_transactions WHERE account_id = ? AND direction = 'CREDIT'",
+                    BigDecimal.class, id);
+            assertThat(balance).isEqualByComparingTo("400.00");
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    private Throwable credit(AccessContext ctx, String accountId, CountDownLatch start) {
+        try {
+            start.await(10, TimeUnit.SECONDS);
+            ledgerService.postCash(ctx, accountId, new LedgerCommands.PostCash(
+                    CashDirection.CREDIT, CashTransactionType.DEPOSIT, new BigDecimal("100.00"),
+                    "USD", null, null, "concurrent credit"));
+            return null;
+        } catch (Exception e) {
+            return e;
         }
     }
 

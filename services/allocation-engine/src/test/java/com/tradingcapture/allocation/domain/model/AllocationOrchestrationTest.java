@@ -213,4 +213,81 @@ class AllocationOrchestrationTest {
         assertThat(allocation.releaseAllAssignments(T2)).isEmpty();
         assertThatIllegalStateException().isThrownBy(() -> a2.release(T2));
     }
+
+    // --- releasing executions after an unsuccessful outcome ------------------------------------
+
+    private static Allocation validated(AllocTransType type) {
+        Allocation allocation = new Allocation("ALLOC-2", type, AllocationStatus.RECEIVED, 1L, T0);
+        allocation.transitionTo(AllocationStatus.VALIDATED, T1);
+        return allocation;
+    }
+
+    @Test
+    void failingAfterValidationFlagsTheExecutionsForRelease() {
+        Allocation allocation = validated(AllocTransType.NEW);
+
+        allocation.failTerminally(OrchestrationFailureCategory.TERMINAL_ORCHESTRATION, "retries exhausted", T2);
+
+        assertThat(allocation.isExecutionsReleasePending()).isTrue();
+        assertThat(allocation.getNextReleaseAt()).isEqualTo(T2);
+    }
+
+    @Test
+    void rejectingAfterExecutionsWereAllocatedFlagsThemForRelease() {
+        Allocation allocation = validated(AllocTransType.NEW);
+        allocation.assignExecution("exec-1", new BigDecimal("100.0000"), T1);
+        allocation.transitionTo(AllocationStatus.EXECUTIONS_ALLOCATED, T1);
+
+        allocation.failTerminally(OrchestrationFailureCategory.INVARIANT_VIOLATION, "broken", T2);
+
+        assertThat(allocation.isExecutionsReleasePending()).isTrue();
+    }
+
+    @Test
+    void endingBeforeValidationNeverFlagsARelease() {
+        Allocation allocation = received();
+
+        allocation.reject("inactive account", T1);
+
+        assertThat(allocation.isExecutionsReleasePending()).isFalse();
+        assertThat(allocation.getNextReleaseAt()).isNull();
+    }
+
+    @Test
+    void aCancelNeverFlagsARelease() {
+        Allocation allocation = validated(AllocTransType.CANCEL);
+
+        allocation.failTerminally(OrchestrationFailureCategory.TERMINAL_ORCHESTRATION, "retries exhausted", T2);
+
+        assertThat(allocation.isExecutionsReleasePending()).isFalse();
+    }
+
+    @Test
+    void aFailedReleaseIsCountedAndRescheduled() {
+        Allocation allocation = validated(AllocTransType.NEW);
+        allocation.reject("insufficient quantity", T1);
+        Instant later = T2.plusSeconds(30);
+
+        allocation.recordReleaseFailure("trading unavailable", later, T2);
+
+        assertThat(allocation.isExecutionsReleasePending()).isTrue();
+        assertThat(allocation.getReleaseAttemptCount()).isEqualTo(1);
+        assertThat(allocation.getNextReleaseAt()).isEqualTo(later);
+        assertThat(allocation.getLastReleaseError()).isEqualTo("trading unavailable");
+    }
+
+    @Test
+    void completingTheReleaseClearsTheFlagAndReturnsTheAnnouncedExecutions() {
+        Allocation allocation = validated(AllocTransType.NEW);
+        allocation.assignExecution("exec-1", new BigDecimal("100.0000"), T1);
+        allocation.transitionTo(AllocationStatus.EXECUTIONS_ALLOCATED, T1);
+        allocation.failTerminally(OrchestrationFailureCategory.INVARIANT_VIOLATION, "broken", T2);
+
+        List<String> released = allocation.completeExecutionRelease(T2);
+
+        assertThat(released).containsExactly("exec-1");
+        assertThat(allocation.isExecutionsReleasePending()).isFalse();
+        assertThat(allocation.getNextReleaseAt()).isNull();
+        assertThat(allocation.netAllocatedQuantity()).isEqualByComparingTo("0");
+    }
 }

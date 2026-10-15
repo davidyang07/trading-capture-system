@@ -63,6 +63,10 @@ public class OutboxEvent {
     @Column(name = "published_at")
     private Instant publishedAt;
 
+    /** Set when the row can never be published; the poller skips it from then on (V4). */
+    @Column(name = "parked_at")
+    private Instant parkedAt;
+
     protected OutboxEvent() {
         // JPA
     }
@@ -93,8 +97,23 @@ public class OutboxEvent {
         this.lastError = safeError;
     }
 
+    /** This row can never be published (see {@code OutboxPoller}): stop retrying it. */
+    public void park(String safeError, Instant now) {
+        this.attempts++;
+        this.lastError = safeError;
+        this.parkedAt = now;
+    }
+
     public boolean isPublished() {
         return publishedAt != null;
+    }
+
+    public boolean isParked() {
+        return parkedAt != null;
+    }
+
+    public Instant getParkedAt() {
+        return parkedAt;
     }
 
     public Long getId() {

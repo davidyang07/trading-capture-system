@@ -33,9 +33,9 @@ import java.util.Optional;
  * Appends immutable cash and security ledger rows. Every mutating path:
  *
  * <ul>
- *   <li>loads the account under an optimistic force-increment lock, so concurrent posts on one
- *       account serialize on its {@code @Version} (the second flush → 409) — this is what makes
- *       the sufficient-funds check race-safe;</li>
+ *   <li>loads the account under a row lock, so concurrent posts on one account run one after
+ *       the other and each sees the earlier ones — this is what makes the sufficient-funds check
+ *       race-safe;</li>
  *   <li>rejects posts to a non-ACTIVE account;</li>
  *   <li>honors an optional idempotency key: a replay with a key already seen for the account
  *       returns the original row instead of appending a duplicate;</li>
@@ -180,7 +180,7 @@ public class LedgerService {
         return balanceService.balances(accountId);
     }
 
-    /** Loads the account under the force-increment lock and enforces ownership visibility. */
+    /** Loads the account under the row lock and enforces ownership visibility. */
     private Account lockAndAuthorize(AccessContext ctx, String accountId) {
         Account account = accounts.findByIdForUpdate(accountId)
                 .orElseThrow(() -> ResourceNotFoundException.account(accountId));

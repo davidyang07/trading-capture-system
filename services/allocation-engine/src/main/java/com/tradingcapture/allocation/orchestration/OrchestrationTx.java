@@ -1,5 +1,6 @@
 package com.tradingcapture.allocation.orchestration;
 
+import com.tradingcapture.allocation.domain.model.AllocTransType;
 import com.tradingcapture.allocation.domain.model.Allocation;
 import com.tradingcapture.allocation.domain.model.AllocationStatus;
 import com.tradingcapture.allocation.domain.model.OrchestrationFailureCategory;
@@ -7,6 +8,8 @@ import com.tradingcapture.allocation.domain.repository.AllocationRepository;
 import com.tradingcapture.allocation.events.OrchestrationEventFactory;
 import com.tradingcapture.allocation.outbox.OutboxRecorder;
 import com.tradingcapture.allocation.selection.SelectionResult;
+import com.tradingcapture.allocation.validation.logical.LogicalValidationCode;
+import com.tradingcapture.allocation.validation.logical.LogicalValidationError;
 import com.tradingcapture.events.EventTopics;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -32,14 +35,17 @@ public class OrchestrationTx {
     private final AllocationRepository allocations;
     private final OutboxRecorder outbox;
     private final OrchestrationEventFactory events;
+    private final TerminalOutcomeEvents outcomes;
     private final OrchestrationMetrics metrics;
     private final Clock clock;
 
     public OrchestrationTx(AllocationRepository allocations, OutboxRecorder outbox,
-                           OrchestrationEventFactory events, OrchestrationMetrics metrics, Clock clock) {
+                           OrchestrationEventFactory events, TerminalOutcomeEvents outcomes,
+                           OrchestrationMetrics metrics, Clock clock) {
         this.allocations = allocations;
         this.outbox = outbox;
         this.events = events;
+        this.outcomes = outcomes;
         this.metrics = metrics;
         this.clock = clock;
     }
@@ -90,8 +96,13 @@ public class OrchestrationTx {
         Optional<Allocation> original = allocations.findReferencedOriginal(a.getRefAllocId(), a.getId())
                 .filter(o -> o.getStatus().isSupersedable());
         if (original.isEmpty()) {
-            a.reject("original allocation " + a.getRefAllocId() + " is no longer live", now());
+            String summary = "original allocation " + a.getRefAllocId() + " is no longer live";
+            a.reject(summary, now());
             a.releaseClaim(now());
+            LogicalValidationCode code = a.getAllocTransType() == AllocTransType.CANCEL
+                    ? LogicalValidationCode.CANCEL_ORIGINAL_INELIGIBLE
+                    : LogicalValidationCode.REPLACE_ORIGINAL_INELIGIBLE;
+            outcomes.rejected(a, List.of(new LogicalValidationError(code, a.getRefAllocId(), summary)));
             return step("release", OrchestrationOutcome.REJECTED);
         }
         List<String> releasedIds = original.get().releaseAllAssignments(now());
@@ -119,14 +130,17 @@ public class OrchestrationTx {
         return step("complete", OrchestrationOutcome.COMPLETED);
     }
 
+    /** Business rejection: REJECTED, announced with every reason in {@code errors}. */
     @Transactional
-    public OrchestrationOutcome commitRejected(Long id, String summary, String stepName) {
+    public OrchestrationOutcome commitRejected(Long id, String summary, List<LogicalValidationError> errors,
+                                               String stepName) {
         Allocation a = allocations.findById(id).orElseThrow();
         if (a.getStatus().isTerminal()) {
             return OrchestrationOutcome.SKIPPED;
         }
         a.reject(summary, now());
         a.releaseClaim(now());
+        outcomes.rejected(a, errors);
         return step(stepName, OrchestrationOutcome.REJECTED);
     }
 
@@ -142,6 +156,7 @@ public class OrchestrationTx {
             a.failTerminally(OrchestrationFailureCategory.TERMINAL_ORCHESTRATION,
                     "retries exhausted: " + summary, now());
             a.releaseClaim(now());
+            outcomes.failed(a);
             return step(stepName, OrchestrationOutcome.FAILED);
         }
         a.recordRetryableFailure(category, summary, nextAttemptAt, now());
@@ -158,7 +173,35 @@ public class OrchestrationTx {
         }
         a.failTerminally(category, summary, now());
         a.releaseClaim(now());
+        outcomes.failed(a);
         return step(stepName, OrchestrationOutcome.FAILED);
+    }
+
+    /**
+     * trading-service released everything bound to a failed or rejected allocation's allocId:
+     * clear the flag and release its own assignments. When an earlier ExecutionsAllocated announced
+     * executions, announce their release (allocId = refAllocId: the allocation released its own).
+     */
+    @Transactional
+    public boolean commitExecutionRelease(Long id) {
+        Allocation a = allocations.findById(id).orElseThrow();
+        if (!a.isExecutionsReleasePending()) {
+            return false;
+        }
+        List<String> releasedIds = a.completeExecutionRelease(now());
+        if (!releasedIds.isEmpty()) {
+            var event = events.executionsReleased(a, a.getAllocId(), releasedIds, outcomes.correlationId(a));
+            outbox.record(event.getMetadata(), event, EventTopics.EXECUTIONS_RELEASED, a.getAllocId(), AGGREGATE);
+        }
+        return true;
+    }
+
+    @Transactional
+    public void recordExecutionReleaseFailure(Long id, String error, Instant nextReleaseAt) {
+        Allocation a = allocations.findById(id).orElseThrow();
+        if (a.isExecutionsReleasePending()) {
+            a.recordReleaseFailure(error, nextReleaseAt, now());
+        }
     }
 
     private OrchestrationOutcome step(String stepName, OrchestrationOutcome outcome) {

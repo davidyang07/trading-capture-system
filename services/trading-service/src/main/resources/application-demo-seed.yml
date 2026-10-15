@@ -1,0 +1,5 @@
+# Local and demo environments only: also load the deterministic demo orders and executions
+# from db/seed. Enabled by docker-compose.full.yml; never by the Kubernetes manifests.
+spring:
+  flyway:
+    locations: classpath:db/migration,classpath:db/seed

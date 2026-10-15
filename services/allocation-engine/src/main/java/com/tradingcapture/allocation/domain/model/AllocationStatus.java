@@ -42,4 +42,14 @@ public enum AllocationStatus implements CodeEnum {
     public boolean isSupersedable() {
         return this == EXECUTIONS_ALLOCATED || this == COMPLETED;
     }
+
+    /**
+     * Working states from which trading-service may already hold executions bound to this
+     * allocation's allocId: the ALLOCATE call can have been made (and its response lost) in
+     * {@link #VALIDATED} or {@link #EXECUTIONS_RELEASED}, and it succeeded in
+     * {@link #EXECUTIONS_ALLOCATED}.
+     */
+    public boolean mayHoldExecutions() {
+        return this == VALIDATED || this == EXECUTIONS_RELEASED || this == EXECUTIONS_ALLOCATED;
+    }
 }

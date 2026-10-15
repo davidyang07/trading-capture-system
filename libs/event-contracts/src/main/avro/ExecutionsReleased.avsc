@@ -2,7 +2,7 @@
     "type": "record",
     "namespace": "com.tradingcapture.events",
     "name": "ExecutionsReleased",
-    "doc": "Previously allocated executions were released back to UNALLOCATED during a Replace/Cancel flow (state EXECUTIONS_RELEASED, emitted from Phase 8 orchestration). Topic tcs.allocation.executions-released.v1, key = allocId.",
+    "doc": "Previously allocated executions were released back to UNALLOCATED: during a Replace/Cancel flow (state EXECUTIONS_RELEASED, emitted from Phase 8 orchestration), or after an allocation that had announced ExecutionsAllocated ended REJECTED or FAILED (then allocId = refAllocId). Topic tcs.allocation.executions-released.v1, key = allocId.",
     "fields": [
         {
             "name": "metadata",
@@ -12,7 +12,7 @@
         {
             "name": "allocId",
             "type": "string",
-            "doc": "Business allocation identifier of the Replace/Cancel instruction that triggered the release."
+            "doc": "Business allocation identifier of the Replace/Cancel instruction that triggered the release, or of the failed allocation releasing its own executions."
         },
         {
             "name": "refAllocId",

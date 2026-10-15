@@ -27,7 +27,11 @@ public record LogicalValidationContext(AllocationView allocation,
                                        List<String> supportedSettlTypes,
                                        ExistingAllocationView existingAllocation) {
 
-    /** Projection of the parsed allocation instruction (never the JPA entity). */
+    /**
+     * Projection of the parsed allocation instruction (never the JPA entity).
+     *
+     * @param avgPx the instruction's AvgPx (tag 6), used to price a buy whose lines carry no money
+     */
     public record AllocationView(String allocId,
                                  AllocTransType transType,
                                  String refAllocId,
@@ -38,14 +42,34 @@ public record LogicalValidationContext(AllocationView allocation,
                                  String securityExchange,
                                  String settlType,
                                  List<AccountLine> accounts,
-                                 List<String> execIds) {
+                                 List<String> execIds,
+                                 BigDecimal avgPx) {
+
+        /** For callers that carry no price. */
+        public AllocationView(String allocId, AllocTransType transType, String refAllocId, String side,
+                              BigDecimal quantity, String currency, String instrumentSymbol,
+                              String securityExchange, String settlType, List<AccountLine> accounts,
+                              List<String> execIds) {
+            this(allocId, transType, refAllocId, side, quantity, currency, instrumentSymbol,
+                    securityExchange, settlType, accounts, execIds, null);
+        }
     }
 
-    /** One NoAllocs line: account + allocated quantity (+ optional settlement money/currency). */
+    /**
+     * One NoAllocs line: account + allocated quantity (+ optional settlement money/currency).
+     *
+     * @param price the line's AllocAvgPx (tag 153), else its AllocPrice (tag 366); may be null
+     */
     public record AccountLine(String accountId,
                               BigDecimal allocQty,
                               BigDecimal netMoney,
-                              String settlCurrency) {
+                              String settlCurrency,
+                              BigDecimal price) {
+
+        /** For callers that carry no price. */
+        public AccountLine(String accountId, BigDecimal allocQty, BigDecimal netMoney, String settlCurrency) {
+            this(accountId, allocQty, netMoney, settlCurrency, null);
+        }
     }
 
     /** Projection of a referenced original allocation for Replace/Cancel prerequisites. */

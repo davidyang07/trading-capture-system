@@ -50,16 +50,28 @@ public class OrchestrationReader {
         return allocations.findById(id).map(a -> {
             List<AccountLine> accounts = a.getAccounts().stream()
                     .map(acct -> new AccountLine(acct.getAllocAccount(), acct.getAllocQty(),
-                            acct.getAllocNetMoney(), acct.getAllocSettlCurrency()))
+                            acct.getAllocNetMoney(), acct.getAllocSettlCurrency(),
+                            acct.getAllocAvgPx() != null ? acct.getAllocAvgPx() : acct.getAllocPrice()))
                     .toList();
             List<String> execIds = a.getExecutions().stream()
                     .map(AllocationExecution::getExecId).toList();
             AllocationView view = new AllocationView(a.getAllocId(), a.getAllocTransType(),
                     a.getRefAllocId(), a.getSide(), a.getQuantity(), a.getCurrency(), a.getSymbol(),
-                    a.getSecurityExchange(), a.getSettlType(), accounts, execIds);
+                    a.getSecurityExchange(), a.getSettlType(), accounts, execIds, a.getAvgPx());
             return new Snapshot(a.getId(), a.getStatus(), a.getAllocTransType(), a.getAllocId(),
                     a.getRefAllocId(), a.getRawMessageId(), a.getAttemptCount(), a.getMaxAttempts(), view);
         });
+    }
+
+    /** What the release driver needs for one allocation whose executions must be released. */
+    public record ReleaseTarget(Long id, String allocId, int releaseAttemptCount) {
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<ReleaseTarget> releaseTarget(Long id) {
+        return allocations.findById(id)
+                .filter(a -> a.isExecutionsReleasePending())
+                .map(a -> new ReleaseTarget(a.getId(), a.getAllocId(), a.getReleaseAttemptCount()));
     }
 
     /** The allocation {@code refAllocId} refers to (New or Replace, live preferred); see the repository. */

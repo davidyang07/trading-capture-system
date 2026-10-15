@@ -157,6 +157,20 @@ public class Allocation {
     @Column(name = "claimed_at")
     private Instant claimedAt;
 
+    // --- releasing executions after an unsuccessful outcome (see requireExecutionRelease) -------
+
+    @Column(name = "executions_release_pending", nullable = false)
+    private boolean executionsReleasePending;
+
+    @Column(name = "release_attempt_count", nullable = false)
+    private int releaseAttemptCount;
+
+    @Column(name = "next_release_at")
+    private Instant nextReleaseAt;
+
+    @Column(name = "last_release_error", length = 500)
+    private String lastReleaseError;
+
     @OneToMany(cascade = CascadeType.ALL)
     @JoinColumn(name = "allocation_id", nullable = false)
     @OrderBy("seq ASC")
@@ -288,6 +302,7 @@ public class Allocation {
 
     /** Terminal business rejection (never retried) — transitions to REJECTED. */
     public void reject(String summary, Instant now) {
+        requireExecutionReleaseIfAnyMayBeBound(now);
         this.failureCategory = OrchestrationFailureCategory.BUSINESS_REJECTION;
         this.failureSummary = truncate(summary, 500);
         this.nextAttemptAt = null;
@@ -300,11 +315,46 @@ public class Allocation {
         if (category == OrchestrationFailureCategory.BUSINESS_REJECTION) {
             throw new IllegalArgumentException("business rejections use reject(), not failTerminally()");
         }
+        requireExecutionReleaseIfAnyMayBeBound(now);
         this.failureCategory = category;
         this.failureSummary = truncate(summary, 500);
         this.nextAttemptAt = null;
         this.completedAt = now;
         transitionTo(AllocationStatus.FAILED, summary, now);
+    }
+
+    /**
+     * Ending unsuccessfully from a state where trading-service may hold executions bound to this
+     * allocId (see {@link AllocationStatus#mayHoldExecutions()}) leaves them bound to an allocation
+     * that will never settle. Flag the allocation so the release driver releases them; releasing
+     * nothing is a no-op in trading-service. A Cancel never binds executions of its own.
+     */
+    private void requireExecutionReleaseIfAnyMayBeBound(Instant now) {
+        if (allocTransType != AllocTransType.CANCEL && status.mayHoldExecutions()) {
+            this.executionsReleasePending = true;
+            this.nextReleaseAt = now;
+        }
+    }
+
+    /**
+     * trading-service confirmed the release: clear the flag and release this allocation's own
+     * assignments. Returns the execution ids whose assignments were still active (those an earlier
+     * ExecutionsAllocated event announced).
+     */
+    public List<String> completeExecutionRelease(Instant now) {
+        this.executionsReleasePending = false;
+        this.nextReleaseAt = null;
+        this.lastReleaseError = null;
+        this.updatedAt = now;
+        return releaseAllAssignments(now);
+    }
+
+    /** The release call failed; try again at {@code nextReleaseAt}. */
+    public void recordReleaseFailure(String error, Instant nextReleaseAt, Instant now) {
+        this.releaseAttemptCount += 1;
+        this.lastReleaseError = truncate(error, 500);
+        this.nextReleaseAt = nextReleaseAt;
+        this.updatedAt = now;
     }
 
     /** Reached a successful terminal state (New/Replace settlement, or a finalized Cancel). */
@@ -540,6 +590,22 @@ public class Allocation {
 
     public String getClaimedBy() {
         return claimedBy;
+    }
+
+    public boolean isExecutionsReleasePending() {
+        return executionsReleasePending;
+    }
+
+    public int getReleaseAttemptCount() {
+        return releaseAttemptCount;
+    }
+
+    public Instant getNextReleaseAt() {
+        return nextReleaseAt;
+    }
+
+    public String getLastReleaseError() {
+        return lastReleaseError;
     }
 
     public Instant getClaimedAt() {

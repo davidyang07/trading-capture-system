@@ -53,9 +53,13 @@ abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport
     @Autowired
     protected AllocationOrchestrator orchestrator;
     @Autowired
+    protected ExecutionReleaseDriver releaseDriver;
+    @Autowired
     protected AllocationDedupFilter dedupFilter;
     @Autowired
     protected JdbcTemplate jdbc;
+    @Autowired
+    private io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry circuitBreakers;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -85,6 +89,9 @@ abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport
     void resetStubsAndData() {
         wireMock.resetAll();
         stubToken();
+        // The Spring context (and its circuit breakers) is shared across tests: a test that
+        // deliberately fails a dependency must not leave its breaker open for the next one.
+        resetCircuitBreakers();
         // FK-safe wipe: the singleton MySQL container is shared with the Phase 7 suites, whose
         // rows (e.g. allocation_misc_fees) would otherwise block deletes by referential order.
         jdbc.execute("SET FOREIGN_KEY_CHECKS = 0");
@@ -95,6 +102,11 @@ abstract class OrchestrationIntegrationTestSupport extends MySqlContainerSupport
             jdbc.update("DELETE FROM " + table);
         }
         jdbc.execute("SET FOREIGN_KEY_CHECKS = 1");
+    }
+
+    /** Close every dependency circuit breaker, as if its open window had elapsed. */
+    protected void resetCircuitBreakers() {
+        circuitBreakers.getAllCircuitBreakers().forEach(io.github.resilience4j.circuitbreaker.CircuitBreaker::reset);
     }
 
     // --- WireMock stubs ------------------------------------------------------------------------

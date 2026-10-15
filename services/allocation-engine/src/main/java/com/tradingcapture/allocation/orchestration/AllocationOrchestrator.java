@@ -15,8 +15,8 @@ import com.tradingcapture.allocation.selection.SelectionCandidate;
 import com.tradingcapture.allocation.selection.SelectionRequest;
 import com.tradingcapture.allocation.selection.SelectionResult;
 import com.tradingcapture.allocation.validation.logical.LogicalAllocationValidator;
+import com.tradingcapture.allocation.validation.logical.LogicalValidationCode;
 import com.tradingcapture.allocation.validation.logical.LogicalValidationContext;
-import com.tradingcapture.allocation.validation.logical.LogicalValidationContext.AccountLine;
 import com.tradingcapture.allocation.validation.logical.LogicalValidationContext.AllocationView;
 import com.tradingcapture.allocation.validation.logical.LogicalValidationContext.ExistingAllocationView;
 import com.tradingcapture.allocation.validation.logical.LogicalValidationError;
@@ -145,7 +145,7 @@ public class AllocationOrchestrator {
         // validated against that original alone and needs no account/instrument/execution lookups.
         if (a.transType() != AllocTransType.CANCEL) {
             try {
-                accountResults = accountClient.validate(accountChecks(view));
+                accountResults = accountClient.validate(AccountRequirements.checks(view));
                 instrumentResults = instrumentClient.resolve(List.of(instrumentKey(view)));
                 executionResults = tradingClient.resolveExecutions(view.execIds());
             } catch (DependencyCallException e) {
@@ -165,7 +165,7 @@ public class AllocationOrchestrator {
             return tx.commitValidated(a.id(), correlationId);
         }
         if (result instanceof LogicalValidationResult.BusinessRejected rejected) {
-            return tx.commitRejected(a.id(), summarize(rejected.errors()), "validate");
+            return tx.commitRejected(a.id(), summarize(rejected.errors()), rejected.errors(), "validate");
         }
         if (result instanceof LogicalValidationResult.DependencyUnavailable dep) {
             return scheduleRetry(a, dep.category(), dep.summary(), "validate");
@@ -199,20 +199,23 @@ public class AllocationOrchestrator {
                 if (e.isRetryable()) {
                     return scheduleRetry(a, e.toCategory(), e.getMessage(), "allocate");
                 }
-                return tx.commitRejected(a.id(), "execution allocation conflict", "allocate");
+                return reject(a, LogicalValidationCode.EXECUTION_ALREADY_ALLOCATED, a.allocId(),
+                        "execution allocation conflict", "allocate");
             }
             return tx.commitAllocated(a.id(), complete.selections(), correlationId);
         }
         if (selection instanceof SelectionResult.Insufficient) {
-            return tx.commitRejected(a.id(), "insufficient eligible execution quantity", "allocate");
+            return reject(a, LogicalValidationCode.INSUFFICIENT_EXECUTION_QUANTITY, a.allocId(),
+                    "insufficient eligible execution quantity", "allocate");
         }
         if (selection instanceof SelectionResult.ExcessQuantity) {
-            return tx.commitRejected(a.id(),
+            return reject(a, LogicalValidationCode.EXCESS_EXECUTION_QUANTITY, a.allocId(),
                     "eligible executions exceed the allocation quantity (executions are allocated whole)",
                     "allocate");
         }
         if (selection instanceof SelectionResult.NoEligibleExecutions) {
-            return tx.commitRejected(a.id(), "no eligible executions to allocate", "allocate");
+            return reject(a, LogicalValidationCode.INSUFFICIENT_EXECUTION_QUANTITY, a.allocId(),
+                    "no eligible executions to allocate", "allocate");
         }
         return tx.commitFailed(a.id(), OrchestrationFailureCategory.TERMINAL_ORCHESTRATION,
                 "execution selection could not proceed", "allocate");
@@ -223,7 +226,10 @@ public class AllocationOrchestrator {
         // concurrent Replace/Cancel already retired since this instruction validated.
         ExistingAllocationView original = reader.existingOriginal(a.refAllocId(), a.id()).orElse(null);
         if (original == null || !original.status().isSupersedable()) {
-            return tx.commitRejected(a.id(), "original allocation " + a.refAllocId() + " is no longer live"
+            LogicalValidationCode code = a.transType() == AllocTransType.CANCEL
+                    ? LogicalValidationCode.CANCEL_ORIGINAL_INELIGIBLE
+                    : LogicalValidationCode.REPLACE_ORIGINAL_INELIGIBLE;
+            return reject(a, code, a.refAllocId(), "original allocation " + a.refAllocId() + " is no longer live"
                     + (original == null ? "" : " (" + original.status() + ")"), "release");
         }
         try {
@@ -245,6 +251,12 @@ public class AllocationOrchestrator {
 
     // --- failure handling ----------------------------------------------------------------------
 
+    /** A rejection decided by this step itself (not logical validation): one typed reason. */
+    private OrchestrationOutcome reject(Snapshot a, LogicalValidationCode code, String identifier,
+                                        String message, String step) {
+        return tx.commitRejected(a.id(), message, List.of(new LogicalValidationError(code, identifier, message)), step);
+    }
+
     private OrchestrationOutcome handleDependencyFailure(Snapshot a, DependencyCallException e, String step) {
         if (e.isRetryable()) {
             return scheduleRetry(a, e.toCategory(), e.getMessage(), step);
@@ -259,19 +271,10 @@ public class AllocationOrchestrator {
     }
 
     private Duration backoff(int attemptCount) {
-        double factor = Math.pow(properties.getRetryBackoffMultiplier(), Math.max(0, attemptCount - 1));
-        long millis = (long) (properties.getRetryBackoffBase().toMillis() * factor);
-        return Duration.ofMillis(Math.min(millis, properties.getRetryBackoffMax().toMillis()));
+        return properties.backoffFor(attemptCount);
     }
 
     // --- projections (all from the plain snapshot view) ----------------------------------------
-
-    private List<AccountValidationClient.Check> accountChecks(AllocationView view) {
-        return view.accounts().stream()
-                .map(line -> new AccountValidationClient.Check(line.accountId(), view.currency(),
-                        line.netMoney(), view.instrumentSymbol(), line.allocQty()))
-                .toList();
-    }
 
     private InstrumentResolutionClient.Key instrumentKey(AllocationView view) {
         return new InstrumentResolutionClient.Key("EXCHANGE_SYMBOL", view.instrumentSymbol(),

@@ -76,4 +76,18 @@ public interface AllocationRepository extends JpaRepository<Allocation, Long> {
             """, nativeQuery = true)
     List<Long> findStrandedExhaustedWork(@Param("leaseCutoff") Instant leaseCutoff,
                                          @Param("batchSize") int batchSize);
+
+    /**
+     * Allocations that ended REJECTED/FAILED while trading-service may still hold executions bound
+     * to their allocId, and whose next release attempt is due. Releasing is idempotent, so two
+     * workers picking the same row only repeat a no-op.
+     */
+    @Query(value = """
+            SELECT id FROM allocations
+            WHERE executions_release_pending = TRUE
+              AND (next_release_at IS NULL OR next_release_at <= :now)
+            ORDER BY id
+            LIMIT :batchSize
+            """, nativeQuery = true)
+    List<Long> findDueExecutionReleases(@Param("now") Instant now, @Param("batchSize") int batchSize);
 }

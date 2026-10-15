@@ -63,14 +63,17 @@ CHECKs; per-exchange identifier uniqueness; FKs to exchanges/currencies) and
 4 settlement options, 7 instruments — incl. an `INACTIVE` one and a deliberately-ambiguous `XYZ`
 symbol on two exchanges — and 5 fee rules; AAPL/MSFT align with the account-service seed).
 
-`spring.flyway.locations` defaults to `db/migration,db/seed`; production-style deployments
-override it to `classpath:db/migration` only.
+By default Flyway applies `db/migration` only. The seed is opt-in: run with the `demo-seed`
+Spring profile (`application-demo-seed.yml`) to add `db/seed`. `docker-compose.full.yml` enables it;
+the Kubernetes manifests do not. Databases that already applied the V2 seed still start, because
+missing migrations are ignored.
+Without the seed, load exchanges and currencies through the admin API before creating instruments.
 
 ## Running locally
 
 ```powershell
 ./scripts/dev-up.ps1                                     # MySQL (3307), Redis (6379), Keycloak
-./mvnw -pl services/enrichment-service spring-boot:run   # http://localhost:8083/swagger-ui.html
+./mvnw -pl services/enrichment-service spring-boot:run -Dspring-boot.run.profiles=demo-seed   # http://localhost:8083/swagger-ui.html
 ```
 
 ## Tests

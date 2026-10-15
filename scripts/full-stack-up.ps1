@@ -6,8 +6,8 @@
 #   .\scripts\full-stack-up.ps1 -Build       # force a rebuild of the service images
 #   .\scripts\full-stack-up.ps1 -TimeoutSeconds 420
 #
-# Seeded demo data is applied automatically: each service's Flyway locations include
-# classpath:db/seed (deterministic dev/demo rows). allocation-engine is Kafka-driven and has
+# Seeded demo data is applied automatically: docker-compose.full.yml enables each service's
+# demo-seed profile, which adds classpath:db/seed (deterministic dev/demo rows) to Flyway. allocation-engine is Kafka-driven and has
 # no seed rows; demo allocations are produced by the scenario harness.
 #
 # admin-web runs on the host for the UI E2E (Playwright webServer). To include a fully

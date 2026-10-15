@@ -49,7 +49,7 @@ services:
       keycloak:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: json-logs
+      SPRING_PROFILES_ACTIVE: json-logs,demo-seed
       SERVICE_NAME: trading-service
       TRADING_DB_HOST: mysql
       TRADING_DB_PORT: "3306"
@@ -72,7 +72,7 @@ services:
       keycloak:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: json-logs
+      SPRING_PROFILES_ACTIVE: json-logs,demo-seed
       SERVICE_NAME: account-service
       ACCOUNT_DB_HOST: mysql
       ACCOUNT_DB_PORT: "3306"
@@ -97,7 +97,7 @@ services:
       keycloak:
         condition: service_healthy
     environment:
-      SPRING_PROFILES_ACTIVE: json-logs
+      SPRING_PROFILES_ACTIVE: json-logs,demo-seed
       SERVICE_NAME: enrichment-service
       ENRICHMENT_DB_HOST: mysql
       ENRICHMENT_DB_PORT: "3306"

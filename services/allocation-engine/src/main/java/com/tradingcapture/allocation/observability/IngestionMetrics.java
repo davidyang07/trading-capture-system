@@ -22,6 +22,7 @@ public class IngestionMetrics {
     private final Counter deadLettered;
     private final Counter outboxPublished;
     private final Counter outboxPublishFailed;
+    private final Counter outboxParked;
 
     public IngestionMetrics(MeterRegistry registry) {
         this.consumed = counter(registry, "consumed", "Inbound records consumed (all deliveries)");
@@ -35,6 +36,7 @@ public class IngestionMetrics {
         this.deadLettered = counter(registry, "dead_lettered", "Records that exhausted retries onto the DLT");
         this.outboxPublished = counter(registry, "outbox_published", "Outbox events published to Kafka");
         this.outboxPublishFailed = counter(registry, "outbox_publish_failed", "Outbox publish attempts that failed");
+        this.outboxParked = counter(registry, "outbox_parked", "Outbox events parked as unpublishable");
     }
 
     private static Counter counter(MeterRegistry registry, String name, String description) {
@@ -83,5 +85,9 @@ public class IngestionMetrics {
 
     public void outboxPublishFailed() {
         outboxPublishFailed.increment();
+    }
+
+    public void outboxParked() {
+        outboxParked.increment();
     }
 }

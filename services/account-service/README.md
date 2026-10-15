@@ -24,9 +24,10 @@ the API contract of record; the service-boundary and ledger rules are summarized
   direction carries the sign. Non-positive values are rejected at the DTO and by a DB CHECK.
 - A DEBIT may not drive a cash balance negative (`INSUFFICIENT_FUNDS`); a DELIVERY may not
   exceed the held position (`INSUFFICIENT_SECURITIES`).
-- Concurrency is serialized on the account: a ledger post loads the account under an optimistic
-  **force-increment** lock, so two simultaneous posts cannot both commit — the loser gets 409
-  (`CONCURRENT_MODIFICATION`), preventing double-spend without pessimistic locks.
+- Concurrency is serialized on the account: a ledger post locks the account row
+  (`SELECT … FOR UPDATE`), so simultaneous posts run one after the other. Each balance check sees
+  the earlier posts, which prevents double-spend, and two valid posts both succeed. If the lock
+  can't be taken in time, the post fails with a retryable 409 (`CONCURRENT_MODIFICATION`).
 - Machine-originated posts may carry an `idempotencyKey` (unique per account): a replay returns
   the original row with **200** (rather than a duplicate + 201); the DB unique constraint is the
   authority under races.
@@ -71,14 +72,16 @@ deliberate index/constraint names) and `db/seed/V2__account_dev_seed.sql` (deter
 data: 5 accounts incl. PENDING and SUSPENDED, opening deposits, and held positions; owners are
 the Keycloak dev usernames; `ACC-SEED-INV1` matches the trading-service seed).
 
-`spring.flyway.locations` defaults to `db/migration,db/seed`; production-style deployments
-override it to `classpath:db/migration` only.
+By default Flyway applies `db/migration` only. The seed is opt-in: run with the `demo-seed`
+Spring profile (`application-demo-seed.yml`) to add `db/seed`. `docker-compose.full.yml` enables it;
+the Kubernetes manifests do not. Databases that already applied the V2 seed still start, because
+missing migrations are ignored.
 
 ## Running locally
 
 ```powershell
 ./scripts/dev-up.ps1                                   # MySQL (host port 3307), Keycloak, Redis
-./mvnw -pl services/account-service spring-boot:run    # http://localhost:8082/swagger-ui.html
+./mvnw -pl services/account-service spring-boot:run -Dspring-boot.run.profiles=demo-seed   # http://localhost:8082/swagger-ui.html
 ```
 
 ## Tests

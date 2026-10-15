@@ -18,8 +18,13 @@ import org.springframework.stereotype.Component;
 public class OutboxBacklogGauge {
 
     public OutboxBacklogGauge(MeterRegistry registry, OutboxEventRepository outbox) {
-        Gauge.builder("tcs.allocation.outbox.backlog", outbox, OutboxEventRepository::countByPublishedAtIsNull)
+        Gauge.builder("tcs.allocation.outbox.backlog", outbox,
+                        OutboxEventRepository::countByPublishedAtIsNullAndParkedAtIsNull)
                 .description("Unpublished allocation outbox rows awaiting Kafka publication")
+                .register(registry);
+        // Any non-zero value needs an operator: these events will never reach Kafka on their own.
+        Gauge.builder("tcs.allocation.outbox.parked", outbox, OutboxEventRepository::countByParkedAtIsNotNull)
+                .description("Allocation outbox rows parked because they can never be published")
                 .register(registry);
     }
 }

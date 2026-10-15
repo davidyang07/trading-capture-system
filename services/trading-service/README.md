@@ -79,14 +79,16 @@ and constraint names) and `db/seed/V2__trading_dev_seed.sql` (deterministic demo
 6 orders / 8 executions incl. a correction chain, a cancellation chain, and an allocated
 fill; owners are the Keycloak dev usernames).
 
-`spring.flyway.locations` defaults to `db/migration,db/seed` for the local/demo profile;
-production-style deployments override it to `classpath:db/migration` only.
+By default Flyway applies `db/migration` only. The seed is opt-in: run with the `demo-seed`
+Spring profile (`application-demo-seed.yml`) to add `db/seed`. `docker-compose.full.yml` enables it;
+the Kubernetes manifests do not. Databases that already applied the V2 seed still start, because
+missing migrations are ignored.
 
 ## Running locally
 
 ```powershell
 ./scripts/dev-up.ps1                                   # MySQL (host port 3307), Keycloak, Redis
-./mvnw -pl services/trading-service spring-boot:run    # http://localhost:8081/swagger-ui.html
+./mvnw -pl services/trading-service spring-boot:run -Dspring-boot.run.profiles=demo-seed   # http://localhost:8081/swagger-ui.html
 ```
 
 If the Keycloak volume predates the `trading-service-aud` realm scope, re-import the realm

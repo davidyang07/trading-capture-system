@@ -13,13 +13,15 @@ import java.util.Optional;
 public interface AccountRepository extends JpaRepository<Account, String>, JpaSpecificationExecutor<Account> {
 
     /**
-     * Loads the account for a ledger-mutating transaction under an optimistic force-increment
-     * lock: the account's {@code @Version} is bumped even though no account column changes, so
-     * two concurrent transactions posting against the same account serialize — the second flush
-     * fails with {@code OptimisticLockingFailureException} (→ 409) instead of both reading a
-     * stale balance and double-spending.
+     * Loads the account for a ledger-mutating transaction under a row lock ({@code SELECT … FOR
+     * UPDATE}): concurrent postings to one account queue behind each other, so each balance check
+     * sees every earlier posting (no double-spend) and both succeed when both are valid.
+     *
+     * <p>It used to be an optimistic force-increment. Inserting a ledger row takes a shared lock
+     * on the account (the foreign-key check), and both transactions then tried to upgrade it to
+     * bump the version: InnoDB killed one as a deadlock, which surfaced as a 500.</p>
      */
-    @Lock(LockModeType.OPTIMISTIC_FORCE_INCREMENT)
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select a from Account a where a.accountId = :accountId")
     Optional<Account> findByIdForUpdate(@Param("accountId") String accountId);
 }

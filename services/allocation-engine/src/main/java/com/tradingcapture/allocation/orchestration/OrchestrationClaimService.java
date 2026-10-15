@@ -24,10 +24,13 @@ public class OrchestrationClaimService {
     private static final Logger log = LoggerFactory.getLogger(OrchestrationClaimService.class);
 
     private final AllocationRepository allocations;
+    private final TerminalOutcomeEvents outcomes;
     private final OrchestrationMetrics metrics;
 
-    public OrchestrationClaimService(AllocationRepository allocations, OrchestrationMetrics metrics) {
+    public OrchestrationClaimService(AllocationRepository allocations, TerminalOutcomeEvents outcomes,
+                                     OrchestrationMetrics metrics) {
         this.allocations = allocations;
+        this.outcomes = outcomes;
         this.metrics = metrics;
     }
 
@@ -71,6 +74,7 @@ public class OrchestrationClaimService {
                     "attempts exhausted in " + allocation.getStatus() + " without a recorded outcome"
                             + lastFailure, now);
             allocation.releaseClaim(now);
+            outcomes.failed(allocation);
             log.warn("Allocation allocationId={} allocId={} exhausted its attempts without a recorded "
                     + "outcome — failed terminally", id, allocation.getAllocId());
         }

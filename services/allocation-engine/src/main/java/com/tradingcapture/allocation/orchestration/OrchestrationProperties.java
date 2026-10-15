@@ -29,6 +29,13 @@ public class OrchestrationProperties {
         this.enabled = enabled;
     }
 
+    /** Capped exponential backoff after {@code attemptCount} attempts (the first retry waits the base). */
+    public Duration backoffFor(int attemptCount) {
+        double factor = Math.pow(retryBackoffMultiplier, Math.max(0, attemptCount - 1));
+        long millis = (long) (retryBackoffBase.toMillis() * factor);
+        return Duration.ofMillis(Math.min(millis, retryBackoffMax.toMillis()));
+    }
+
     public Duration getPollInterval() {
         return pollInterval;
     }

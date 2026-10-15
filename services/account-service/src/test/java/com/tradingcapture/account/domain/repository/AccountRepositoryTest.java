@@ -29,8 +29,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Real-MySQL repository semantics: Flyway-created schema, enum string codes, DECIMAL scales,
- * the ledger sum queries, the uniqueness of idempotency keys, and the optimistic
- * force-increment lock used to serialize concurrent ledger posts.
+ * the ledger sum queries, the uniqueness of idempotency keys, and the row lock used to serialize
+ * concurrent ledger posts.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)

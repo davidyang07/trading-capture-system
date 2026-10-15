@@ -133,7 +133,7 @@ Run a service, then browse its OpenAPI UI at `/swagger-ui.html` and health probe
 `/actuator/health`:
 
 ```powershell
-./mvnw -B -ntp -pl services/trading-service spring-boot:run
+./mvnw -B -ntp -pl services/trading-service spring-boot:run -Dspring-boot.run.profiles=demo-seed
 ```
 
 Run the operator console:

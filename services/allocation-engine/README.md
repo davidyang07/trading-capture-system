@@ -126,14 +126,18 @@ unresolved execution) are ordinary 200 results — never exceptions. `RemoteCall
 in the dependency's Resilience4j retry + circuit breaker: only transient transport failures
 (timeout / connection loss / 5xx / 503) are retried and counted toward the breaker
 (`RetryableDependencyPredicate`); 4xx business/authorization results are neither retried nor trip it; a
-circuit-open surfaces as a retryable `UNAVAILABLE`. `DependencyFailureType → OrchestrationFailureCategory`
+circuit-open surfaces as a retryable `UNAVAILABLE`. A failure to obtain the machine token is classified
+the same way (`TokenAcquisitionException`): Keycloak unreachable, timing out, answering 5xx/429 or
+`server_error`/`temporarily_unavailable` is a retryable `UNAVAILABLE`; a rejected client is `UNAUTHORIZED`. `DependencyFailureType → OrchestrationFailureCategory`
 so a failure schedules a retry or escalates to terminal. Metrics:
 `tcs.allocation.dep.calls{dependency,operation,outcome}` + resilience4j-micrometer.
 
 ### Logical validation (`validation/logical/`)
 
 Runs after resolution, over a framework-free `LogicalValidationContext` (no HTTP/JPA types). Stages,
-in deterministic order: **account** (exists/active/owner/cash/securities) → **instrument**
+in deterministic order: **account** (exists/active/owner, plus cash for a buy and the position for a
+sell — `AccountRequirements`: a buy needs the line's NetMoney, else its quantity at AllocAvgPx/AllocPrice
+or the instruction's AvgPx, rounded up; a sell needs the allocated quantity of the instrument) → **instrument**
 (found/ambiguous/inactive/exchange/currency/settlement) → **execution** (not-found/cancelled/superseded/
 already-allocated/instrument+side match/allocatable qty/duplicate ref) → **quantity** (positive/
 precision/account-sum/aggregate-exec-qty, which must equal the quantity exactly) → **transaction-type**
@@ -200,19 +204,39 @@ actively leased (`claimed_at` null or older than the lease). It skips terminal/e
 leased rows; an expired lease is reclaimed. Retryable failures schedule an exponential backoff; exhausted
 attempts escalate to `FAILED`. A row whose **last** attempt ended without recording any outcome (crash,
 concurrency conflict, unexpected error) would never be claimed again, so once its lease expires the claim
-transaction fails it terminally (`TERMINAL_ORCHESTRATION`, metric `driver{event=exhausted_failed}`). Metrics `tcs.allocation.orchestration.{steps,driver}` and
+transaction fails it terminally (`TERMINAL_ORCHESTRATION`, metric `driver{event=exhausted_failed}`).
+
+**Releasing executions of unsuccessful allocations.** An allocation that ends `REJECTED` or `FAILED`
+from `VALIDATED`, `EXECUTIONS_RELEASED` or `EXECUTIONS_ALLOCATED` may have executions bound to its
+allocId in trading-service (an ALLOCATE whose response was lost, then retries ran out). It is flagged
+`executions_release_pending` (V4), and `ExecutionReleaseDriver`, run on the same scheduler tick,
+asks trading-service to RELEASE everything bound to that allocId until it succeeds. Releasing is
+idempotent and releasing nothing is a no-op, and retries use the orchestration backoff with no attempt
+cap. Metric: `tcs.allocation.orchestration.execution_release{outcome}`.
+
+Metrics `tcs.allocation.orchestration.{steps,driver}` and
 `tcs.allocation.dedup` are all low-cardinality (no allocation/account/execution/correlation ids as tags).
 
 ### Orchestration outbox events (ADR-0005)
 
-`AllocationValidated`, `ExecutionsAllocated`, `ExecutionsReleased`, `SettlementRequested` — recorded in
+`AllocationValidated`, `ExecutionsAllocated`, `ExecutionsReleased`, `SettlementRequested`, and for
+unsuccessful outcomes `AllocationRejected` (every reason, as typed error codes) + `ExceptionReported` on
+`REJECTED`, and `ExceptionReported` on `FAILED` (including rows failed as stranded) — recorded in
 the same transaction as the state change (hard-guarded), Kafka key = business `allocId` (deterministic
 per-allocation ordering), full metadata with correlation + causation (the inbound raw message), decimal
 fidelity at scale 4. Execution identifiers in events are the internal execution ids stored on the
 assignments (the ExecID→internal mapping is resolved once at orchestration entry), so they are stable and
 identical across a New's `ExecutionsAllocated` and a later Replace/Cancel's `ExecutionsReleased`. Duplicate
 events are impossible on retry/replay because the emitting transition is state-guarded and the outbox row
-carries a unique event id.
+carries a unique event id. When the release driver frees executions that an `ExecutionsAllocated`
+announced, it publishes `ExecutionsReleased` with `refAllocId = allocId` (the allocation released its own).
+
+The outbox poller retries a failed publish in order and stops the batch, so per-aggregate ordering
+holds. A row that can never be published is the exception: an undecodable payload, a record over the
+broker's size limit, or a schema the registry refuses (409/422). Such a row is parked
+(`outbox_event.parked_at`, V4) so it stops blocking every later event. It is logged at ERROR and
+counted by the `tcs.allocation.outbox.parked` gauge (and `tcs.allocation.ingest.outbox_parked`), and it
+needs an operator.
 
 ## Configuration
 

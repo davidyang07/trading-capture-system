@@ -34,6 +34,12 @@ public class OrchestrationMetrics {
         driver(event, 1);
     }
 
+    /** outcome ∈ {released, retry}: releasing executions of a rejected/failed allocation. */
+    public void executionRelease(String outcome) {
+        Counter.builder("tcs.allocation.orchestration.execution_release")
+                .tag("outcome", outcome).register(registry).increment();
+    }
+
     /** result ∈ {hit, miss, error}. */
     public void dedup(String result) {
         Counter.builder("tcs.allocation.dedup")

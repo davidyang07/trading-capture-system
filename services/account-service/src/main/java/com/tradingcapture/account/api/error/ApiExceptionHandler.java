@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -101,6 +102,14 @@ public class ApiExceptionHandler {
         log.info("Optimistic lock conflict: {}", ex.getMessage());
         return ProblemDetails.build(HttpStatus.CONFLICT, ErrorCode.CONCURRENT_MODIFICATION.name(),
                 "The account was modified concurrently; retry the request");
+    }
+
+    /** A row lock could not be taken in time (lock-wait timeout or deadlock victim): safe to retry. */
+    @ExceptionHandler(PessimisticLockingFailureException.class)
+    public ProblemDetail handlePessimisticLock(PessimisticLockingFailureException ex) {
+        log.info("Lock conflict: {}", ex.getMostSpecificCause().getMessage());
+        return ProblemDetails.build(HttpStatus.CONFLICT, ErrorCode.CONCURRENT_MODIFICATION.name(),
+                "The account is busy with another update; retry the request");
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)

@@ -4,13 +4,17 @@ import com.tradingcapture.allocation.domain.model.Allocation;
 import com.tradingcapture.allocation.domain.model.AllocationAccount;
 import com.tradingcapture.allocation.domain.model.AllocationAssignment;
 import com.tradingcapture.allocation.domain.model.AllocationOrder;
+import com.tradingcapture.allocation.validation.logical.LogicalValidationError;
 import com.tradingcapture.events.AllocatedExecution;
+import com.tradingcapture.events.AllocationRejected;
 import com.tradingcapture.events.AllocationValidated;
 import com.tradingcapture.events.EventMetadata;
+import com.tradingcapture.events.ExceptionReported;
 import com.tradingcapture.events.ExecutionsAllocated;
 import com.tradingcapture.events.ExecutionsReleased;
 import com.tradingcapture.events.SettlementAccount;
 import com.tradingcapture.events.SettlementRequested;
+import com.tradingcapture.events.ValidationErrorDetail;
 import org.springframework.stereotype.Component;
 
 import java.math.RoundingMode;
@@ -20,7 +24,8 @@ import java.util.UUID;
 
 /**
  * Builds the Phase 8 orchestration outcome events (AllocationValidated, ExecutionsAllocated,
- * ExecutionsReleased, SettlementRequested) with a complete {@link EventMetadata} envelope. Causation
+ * ExecutionsReleased, SettlementRequested, and for unsuccessful outcomes AllocationRejected and
+ * ExceptionReported) with a complete {@link EventMetadata} envelope. Causation
  * is the inbound raw message; the aggregate id and Kafka key are the business allocId, giving
  * deterministic per-allocation ordering. Decimal quantities are emitted at scale 4 (ADR-0014).
  *
@@ -87,6 +92,46 @@ public class OrchestrationEventFactory {
                 .setSettlementDate(allocation.getSettlDate())
                 .setAccounts(accounts)
                 .build();
+    }
+
+    /** A REJECTED outcome, carrying every reason (logical validation errors or the step's own). */
+    public AllocationRejected allocationRejected(Allocation allocation, List<LogicalValidationError> errors,
+                                                 String correlationId) {
+        return AllocationRejected.newBuilder()
+                .setMetadata(metadata(AllocationRejected.class.getSimpleName(), correlationId, allocation))
+                .setAllocId(allocation.getAllocId())
+                .setRawMessageId(allocation.getRawMessageId())
+                .setErrors(details(errors))
+                .build();
+    }
+
+    /** A REJECTED or FAILED allocation, for exception monitoring (sourceType ALLOCATION). */
+    public ExceptionReported exceptionReported(Allocation allocation, String summary,
+                                               List<LogicalValidationError> errors, String correlationId) {
+        return ExceptionReported.newBuilder()
+                .setMetadata(metadata(ExceptionReported.class.getSimpleName(), correlationId, allocation))
+                .setSourceType(IngestionEventFactory.SOURCE_ALLOCATION)
+                .setSourceRef(allocation.getAllocId())
+                .setSummary(truncate(summary, 500))
+                .setErrors(details(errors))
+                .build();
+    }
+
+    private static List<ValidationErrorDetail> details(List<LogicalValidationError> errors) {
+        return errors.stream()
+                .map(error -> ValidationErrorDetail.newBuilder()
+                        .setErrorCode(error.code().name())
+                        .setMessage(truncate(error.message(), 500))
+                        .setFields(List.of())
+                        .build())
+                .toList();
+    }
+
+    private static String truncate(String value, int max) {
+        if (value == null) {
+            return "";
+        }
+        return value.length() > max ? value.substring(0, max) : value;
     }
 
     private static SettlementAccount settlementAccount(AllocationAccount account) {

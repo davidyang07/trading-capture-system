@@ -19,9 +19,12 @@ spring:
         jdbc:
           time_zone: UTC
   flyway:
-    # db/seed carries the deterministic dev/demo data; production-style deployments
-    # override this property to db/migration only (see services/trading-service/README.md).
-    locations: classpath:db/migration,classpath:db/seed
+    # Schema only. db/seed holds demo orders and executions and is opt-in through the
+    # `demo-seed` profile (application-demo-seed.yml), never loaded by default.
+    locations: classpath:db/migration
+    # Databases created before the seed became opt-in have already applied the V2 seed; let them
+    # start without it on the classpath instead of failing validation.
+    ignore-migration-patterns: "*:missing,*:future"
   security:
     oauth2:
       resourceserver:

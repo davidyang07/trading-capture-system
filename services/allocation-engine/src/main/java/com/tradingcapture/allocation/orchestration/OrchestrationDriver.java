@@ -25,15 +25,18 @@ public class OrchestrationDriver {
 
     private final OrchestrationClaimService claimService;
     private final AllocationOrchestrator orchestrator;
+    private final ExecutionReleaseDriver releaseDriver;
     private final OrchestrationProperties properties;
     private final OrchestrationMetrics metrics;
     private final Clock clock;
     private final String workerId = "alloc-" + UUID.randomUUID().toString().substring(0, 8);
 
     public OrchestrationDriver(OrchestrationClaimService claimService, AllocationOrchestrator orchestrator,
-                               OrchestrationProperties properties, OrchestrationMetrics metrics, Clock clock) {
+                               ExecutionReleaseDriver releaseDriver, OrchestrationProperties properties,
+                               OrchestrationMetrics metrics, Clock clock) {
         this.claimService = claimService;
         this.orchestrator = orchestrator;
+        this.releaseDriver = releaseDriver;
         this.properties = properties;
         this.metrics = metrics;
         this.clock = clock;
@@ -48,6 +51,11 @@ public class OrchestrationDriver {
             runOnce();
         } catch (RuntimeException e) {
             log.warn("Orchestration driver tick failed: {}", e.toString());
+        }
+        try {
+            releaseDriver.runOnce();
+        } catch (RuntimeException e) {
+            log.warn("Execution release tick failed: {}", e.toString());
         }
     }
 

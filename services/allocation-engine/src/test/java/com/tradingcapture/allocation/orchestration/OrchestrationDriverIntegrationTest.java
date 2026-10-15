@@ -57,6 +57,9 @@ class OrchestrationDriverIntegrationTest extends OrchestrationIntegrationTestSup
         assertThat(failed.getStatus()).isEqualTo(AllocationStatus.FAILED);
         assertThat(failed.getFailureCategory()).isEqualTo(OrchestrationFailureCategory.TERMINAL_ORCHESTRATION);
         assertThat(failed.getFailureSummary()).startsWith("attempts exhausted in RECEIVED");
+        // The failure is announced; nothing can be bound before validation, so nothing to release.
+        assertThat(outboxCount("ExceptionReported", "A-C2-EXH")).isEqualTo(1);
+        assertThat(failed.isExecutionsReleasePending()).isFalse();
     }
 
     @Test
@@ -87,6 +90,9 @@ class OrchestrationDriverIntegrationTest extends OrchestrationIntegrationTestSup
                 """, id))
                 .containsEntry("from_status", "EXECUTIONS_ALLOCATED")
                 .containsEntry("to_status", "FAILED");
+        // Its executions are bound in trading-service, so they are queued for release.
+        assertThat(failed.isExecutionsReleasePending()).isTrue();
+        assertThat(outboxCount("ExceptionReported", "A-C6")).isEqualTo(1);
     }
 
     @Test

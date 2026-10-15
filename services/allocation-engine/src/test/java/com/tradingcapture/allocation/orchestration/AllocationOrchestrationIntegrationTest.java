@@ -8,7 +8,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
 import static com.github.tomakehurst.wiremock.client.WireMock.containing;
+import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
+import static com.github.tomakehurst.wiremock.client.WireMock.put;
 import static com.github.tomakehurst.wiremock.client.WireMock.putRequestedFor;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -70,6 +73,10 @@ class AllocationOrchestrationIntegrationTest extends OrchestrationIntegrationTes
         assertThat(a.getFailureCategory()).isEqualTo(OrchestrationFailureCategory.BUSINESS_REJECTION);
         assertThat(assignmentsOf("A-REJ-1")).isEmpty();
         assertThat(outboxCount("ExecutionsAllocated", "A-REJ-1")).isZero();
+        // The rejection is announced, and nothing was bound before validation so nothing is released.
+        assertThat(outboxCount("AllocationRejected", "A-REJ-1")).isEqualTo(1);
+        assertThat(outboxCount("ExceptionReported", "A-REJ-1")).isEqualTo(1);
+        assertThat(a.isExecutionsReleasePending()).isFalse();
     }
 
     @Test
@@ -82,7 +89,55 @@ class AllocationOrchestrationIntegrationTest extends OrchestrationIntegrationTes
 
         driver.runOnce();
 
-        assertThat(reload(id).getStatus()).isEqualTo(AllocationStatus.REJECTED);
+        Allocation rejected = reload(id);
+        assertThat(rejected.getStatus()).isEqualTo(AllocationStatus.REJECTED);
+        assertThat(outboxCount("AllocationRejected", "A-INS-1")).isEqualTo(1);
+        // Logical validation catches the shortfall before anything could be bound.
+        assertThat(rejected.isExecutionsReleasePending()).isFalse();
+    }
+
+    @Test
+    void anAllocationWhoseAllocateResponseIsLostUntilRetriesRunOutReleasesItsExecutions() {
+        Long id = persistNew("A-LOST-1", "100.0000", List.of("E1"));
+        jdbc.update("UPDATE allocations SET max_attempts = 1 WHERE id = ?", id);
+        stubAccountsActive("ACC-1");
+        stubInstrumentActive("AAPL");
+        stubExecutionEligible("E1", "exec_E1", "100.0000", "2026-07-17T10:00:00Z");
+        // trading-service may have bound the execution, but the response never arrives.
+        wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state"))
+                .willReturn(aResponse().withStatus(503)));
+
+        driver.runOnce();
+
+        Allocation failed = reload(id);
+        assertThat(failed.getStatus()).isEqualTo(AllocationStatus.FAILED);
+        assertThat(failed.isExecutionsReleasePending()).isTrue();
+        assertThat(outboxCount("ExceptionReported", "A-LOST-1")).isEqualTo(1);
+
+        // The first release attempt also fails: it is counted and rescheduled, not dropped.
+        assertThat(releaseDriver.runOnce()).isZero();
+        Allocation retrying = reload(id);
+        assertThat(retrying.isExecutionsReleasePending()).isTrue();
+        assertThat(retrying.getReleaseAttemptCount()).isEqualTo(1);
+        assertThat(retrying.getNextReleaseAt()).isAfter(java.time.Instant.now().minusSeconds(1));
+        assertThat(releaseDriver.runOnce()).isZero(); // not due yet
+
+        // trading-service recovers; once due (and the breaker's open window has passed), the
+        // release goes through and the flag clears.
+        jdbc.update("UPDATE allocations SET next_release_at = TIMESTAMP('2020-01-01') WHERE id = ?", id);
+        resetCircuitBreakers();
+        wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state"))
+                .withRequestBody(containing("RELEASE"))
+                .willReturn(okJson("""
+                        { "allocationId": "A-LOST-1", "action": "RELEASE", "appliedCount": 1, "executions": [] }
+                        """)));
+
+        assertThat(releaseDriver.runOnce()).isEqualTo(1);
+        assertThat(reload(id).isExecutionsReleasePending()).isFalse();
+        wireMock.verify(putRequestedFor(urlEqualTo("/internal/v1/executions/allocation-state"))
+                .withRequestBody(containing("RELEASE"))
+                .withRequestBody(containing("A-LOST-1")));
+        assertThat(releaseDriver.runOnce()).isZero(); // nothing left to release
     }
 
     @Test
@@ -193,6 +248,20 @@ class AllocationOrchestrationIntegrationTest extends OrchestrationIntegrationTes
         assertThat(a.getStatus()).isEqualTo(AllocationStatus.REJECTED); // VALIDATED -> REJECTED, legal
         assertThat(a.getFailureCategory()).isEqualTo(OrchestrationFailureCategory.BUSINESS_REJECTION);
         assertThat(assignmentsOf("A-CONFLICT-1")).isEmpty();
+        assertThat(outboxCount("AllocationRejected", "A-CONFLICT-1")).isEqualTo(1);
+
+        // Rejected after validation: release whatever trading-service might hold for this allocId
+        // (nothing here; the release is a no-op). Nothing was announced as allocated, so no
+        // ExecutionsReleased follows.
+        assertThat(a.isExecutionsReleasePending()).isTrue();
+        wireMock.stubFor(put(urlEqualTo("/internal/v1/executions/allocation-state"))
+                .withRequestBody(containing("RELEASE"))
+                .willReturn(okJson("""
+                        { "allocationId": "A-CONFLICT-1", "action": "RELEASE", "appliedCount": 0, "executions": [] }
+                        """)));
+        assertThat(releaseDriver.runOnce()).isEqualTo(1);
+        assertThat(reload(id).isExecutionsReleasePending()).isFalse();
+        assertThat(outboxCount("ExecutionsReleased", "A-CONFLICT-1")).isZero();
     }
 
     @Test
@@ -383,6 +452,8 @@ class AllocationOrchestrationIntegrationTest extends OrchestrationIntegrationTes
         assertThat(a.getStatus()).isEqualTo(AllocationStatus.FAILED);
         assertThat(a.getNextAttemptAt()).isNull();
         assertThat(a.getFailureCategory().isRetryable()).isFalse();
+        assertThat(outboxCount("ExceptionReported", "A-PERM-1")).isEqualTo(1);
+        assertThat(outboxCount("AllocationRejected", "A-PERM-1")).isZero();
     }
 
     @Test

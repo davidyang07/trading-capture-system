@@ -14,9 +14,9 @@ import java.time.Instant;
 /**
  * A financial account owned by the authenticated subject that created it (or an admin-nominated
  * owner). This is the only mutable aggregate in the service: its {@code status} changes through
- * the lifecycle and {@code @Version} guards it against lost updates — the ledger append flows
- * force-increment this version so concurrent transactions on the same account serialize on it,
- * making the sufficient-funds check race-safe without pessimistic locks.
+ * the lifecycle and {@code @Version} guards it against lost updates. The ledger append flows lock
+ * this row ({@code SELECT … FOR UPDATE}) so concurrent postings to one account queue behind each
+ * other, which makes the sufficient-funds check race-safe.
  *
  * <p>Balances are never stored here; they are always summed from the immutable ledger rows
  * (ADR-0002, data-ownership balance semantics).</p>

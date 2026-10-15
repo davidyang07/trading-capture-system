@@ -7,8 +7,12 @@ import com.tradingcapture.events.AllocationReceived;
 import com.tradingcapture.events.EventMetadata;
 import com.tradingcapture.events.EventTopics;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.confluent.kafka.schemaregistry.client.rest.exceptions.RestClientException;
 import org.apache.avro.specific.SpecificRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.SerializationException;
+import org.springframework.kafka.core.KafkaProducerException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +21,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
 import java.math.BigDecimal;
+import java.net.ConnectException;
+import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -35,7 +41,8 @@ import static org.mockito.Mockito.when;
 /**
  * The poller's central guarantee: a publish failure STOPS the batch (per-aggregate id order
  * is never broken by skipping), records the attempt with a safe error, and the next tick
- * retries from the failed row.
+ * retries from the failed row. The one exception is a row no retry can ever publish, which is
+ * parked so it cannot block every later event.
  */
 class OutboxPollerTest {
 
@@ -57,7 +64,7 @@ class OutboxPollerTest {
                 Clock.fixed(NOW, ZoneOffset.UTC), 50, Duration.ofSeconds(1));
         first = row("ALLOC-1", "evt-1");
         second = row("ALLOC-2", "evt-2");
-        when(repository.findByPublishedAtIsNullOrderByIdAsc(any(Limit.class)))
+        when(repository.findByPublishedAtIsNullAndParkedAtIsNullOrderByIdAsc(any(Limit.class)))
                 .thenReturn(List.of(first, second));
     }
 
@@ -116,5 +123,75 @@ class OutboxPollerTest {
         verify(kafkaTemplate, org.mockito.Mockito.times(2)).send(sent.capture());
         assertThat(sent.getAllValues()).extracting(ProducerRecord::key)
                 .containsExactly("ALLOC-1", "ALLOC-2");
+    }
+
+    // --- rows that can never be published are parked, not retried forever -----------------------
+
+    @SuppressWarnings("unchecked")
+    private void secondRowPublishes() {
+        SendResult<String, SpecificRecord> ok = mock(SendResult.class);
+        when(kafkaTemplate.send(org.mockito.ArgumentMatchers.<ProducerRecord<String, SpecificRecord>>argThat(
+                r -> r != null && "ALLOC-2".equals(r.key()))))
+                .thenReturn(CompletableFuture.completedFuture(ok));
+    }
+
+    @Test
+    void anUndecodablePayloadIsParkedAndTheNextRowStillPublishes() {
+        OutboxEvent garbage = new OutboxEvent("evt-x", "AllocationReceived", "ALLOCATION", "ALLOC-X",
+                EventTopics.ALLOCATION_RECEIVED, "ALLOC-X", "not avro".getBytes(StandardCharsets.UTF_8),
+                "corr", null, NOW);
+        when(repository.findByPublishedAtIsNullAndParkedAtIsNullOrderByIdAsc(any(Limit.class)))
+                .thenReturn(List.of(garbage, second));
+        secondRowPublishes();
+
+        poller.publishPending();
+
+        assertThat(garbage.isParked()).isTrue();
+        assertThat(garbage.getParkedAt()).isEqualTo(NOW);
+        assertThat(garbage.getLastError()).contains("undecodable payload");
+        assertThat(second.isPublished()).isTrue();
+    }
+
+    @Test
+    void aRecordOverTheBrokerSizeLimitIsParked() {
+        when(kafkaTemplate.send(org.mockito.ArgumentMatchers.<ProducerRecord<String, SpecificRecord>>argThat(
+                r -> r != null && "ALLOC-1".equals(r.key()))))
+                .thenReturn(CompletableFuture.failedFuture(new KafkaProducerException(null, "send failed",
+                        new RecordTooLargeException("The message is 1500000 bytes"))));
+        secondRowPublishes();
+
+        poller.publishPending();
+
+        assertThat(first.isParked()).isTrue();
+        assertThat(first.isPublished()).isFalse();
+        assertThat(second.isPublished()).isTrue();
+    }
+
+    @Test
+    void aSchemaTheRegistryRefusesIsParked() {
+        when(kafkaTemplate.send(org.mockito.ArgumentMatchers.<ProducerRecord<String, SpecificRecord>>argThat(
+                r -> r != null && "ALLOC-1".equals(r.key()))))
+                .thenThrow(new SerializationException("Error registering Avro schema",
+                        new RestClientException("Schema being registered is incompatible", 409, 409)));
+        secondRowPublishes();
+
+        poller.publishPending();
+
+        assertThat(first.isParked()).isTrue();
+        assertThat(second.isPublished()).isTrue();
+    }
+
+    @Test
+    void anUnreachableSchemaRegistryIsRetriedInOrderNotParked() {
+        when(kafkaTemplate.send(any(ProducerRecord.class)))
+                .thenThrow(new SerializationException("Error registering Avro schema",
+                        new ConnectException("Connection refused")));
+
+        poller.publishPending();
+
+        assertThat(first.isParked()).isFalse();
+        assertThat(first.getAttempts()).isEqualTo(1);
+        assertThat(second.isPublished()).isFalse();
+        assertThat(second.getAttempts()).isZero();
     }
 }
