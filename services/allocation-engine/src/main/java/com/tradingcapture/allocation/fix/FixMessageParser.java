@@ -134,8 +134,14 @@ public class FixMessageParser {
                     opt(group, LAST_CAPACITY)));
         }
 
+        List<ExtractedAllocation.GroupCount> groupCounts = new ArrayList<>();
+        countOf(message, NO_ORDERS, null, groupCounts);
+        countOf(message, NO_EXECS, null, groupCounts);
+        countOf(message, NO_ALLOCS, null, groupCounts);
+
         List<ExtractedAllocation.Account> accounts = new ArrayList<>();
         for (Group group : message.getGroups(NO_ALLOCS)) {
+            countOf(group, NO_MISC_FEES, accounts.size(), groupCounts);
             List<ExtractedAllocation.MiscFee> fees = new ArrayList<>();
             for (Group feeGroup : group.getGroups(NO_MISC_FEES)) {
                 fees.add(new ExtractedAllocation.MiscFee(
@@ -178,7 +184,18 @@ public class FixMessageParser {
                 opt(message, SECURITY_EXCHANGE),
                 orders,
                 executions,
-                accounts);
+                accounts,
+                groupCounts);
+    }
+
+    /** Records a NumInGroup field present on {@code fieldMap} next to its parsed entry count. */
+    private static void countOf(FieldMap fieldMap, int countTag, Integer ownerEntry,
+                                List<ExtractedAllocation.GroupCount> counts) {
+        String declared = opt(fieldMap, countTag);
+        if (declared != null) {
+            counts.add(new ExtractedAllocation.GroupCount(countTag, ownerEntry, declared,
+                    fieldMap.getGroups(countTag).size()));
+        }
     }
 
     /** Raw string value of a field, or null when absent — never an exception. */

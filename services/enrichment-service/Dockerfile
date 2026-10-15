@@ -22,7 +22,7 @@ ENV SPRING_PROFILES_ACTIVE=json-logs \
     SERVICE_NAME=enrichment-service \
     JAVA_OPTS="-XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0"
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=10 \
-  CMD ["/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8083 && echo -e 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'UP' <&3"]
+  CMD ["/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${MANAGEMENT_SERVER_PORT:-8083} && echo -e 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'UP' <&3"]
 ENTRYPOINT ["/bin/bash", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
 
 LABEL org.opencontainers.image.title="tcs-enrichment-service" \

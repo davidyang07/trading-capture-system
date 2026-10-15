@@ -94,7 +94,7 @@ paths:
         "404": { $ref: '#/components/responses/NotFound' }
     put:
       tags: [orders]
-      summary: Update order (scope order:update; status NEW only; executed-quantity invariants enforced)
+      summary: Update order (scope order:update; status NEW and no execution history)
       requestBody:
         required: true
         content:
@@ -111,7 +111,7 @@ paths:
         "403": { $ref: '#/components/responses/Forbidden' }
         "404": { $ref: '#/components/responses/NotFound' }
         "409":
-          description: Not eligible (status is not NEW)
+          description: Not eligible (not NEW, or execution history exists)
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }

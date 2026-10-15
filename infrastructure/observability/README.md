@@ -11,9 +11,10 @@ through `observability-support` and exposes:
 
 - `/actuator/health`, `/actuator/health/{liveness,readiness}`, `/actuator/info` — probes.
 - `/actuator/prometheus` — the scrape endpoint (a documented public metrics path; it exposes only
-  meters, never business data — `env`/`beans`/etc. stay locked behind the JWT). The Kubernetes
-  manifests restrict it to in-namespace traffic; other deployments should provide an equivalent
-  network boundary or a separate management port.
+  meters, never business data — `env`/`beans`/etc. stay locked behind the JWT). Deployed setups
+  (Kubernetes, `docker-compose.full.yml`) move actuator to a separate management port
+  (`MANAGEMENT_SERVER_PORT`, API port + 1000) that is never exposed outside the cluster or compose
+  network, and `prometheus.full.yml` scrapes that port. `/actuator/metrics` is not exposed.
 
 Every meter carries a common `application=<spring.application.name>` tag (set in
 `ObservabilitySupportAutoConfiguration`) so Prometheus/Grafana can slice by service.

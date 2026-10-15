@@ -48,9 +48,12 @@ public class IngestionEventFactory {
                 .build();
     }
 
-    public AllocationRejected allocationRejected(Long rawMessageId, String allocId,
+    /**
+     * @param allocId     the AllocID the sender used, when readable (null otherwise)
+     * @param aggregateId the allocId when an allocation row was stored, else the raw-message id
+     */
+    public AllocationRejected allocationRejected(Long rawMessageId, String allocId, String aggregateId,
                                                  List<CollectedError> errors, String correlationId) {
-        String aggregateId = allocId != null ? allocId : String.valueOf(rawMessageId);
         return AllocationRejected.newBuilder()
                 .setMetadata(metadata(AllocationRejected.class.getSimpleName(), correlationId,
                         String.valueOf(rawMessageId), aggregateId))

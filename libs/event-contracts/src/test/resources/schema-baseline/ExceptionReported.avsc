@@ -1,0 +1,37 @@
+{
+    "type": "record",
+    "namespace": "com.tradingcapture.events",
+    "name": "ExceptionReported",
+    "doc": "A message or allocation reached a failure state (PARSE_FAILED, INVALID, REJECTED, or FAILED) that support/exception-monitoring systems should see. Topic tcs.allocation.exception-reported.v1, key = source reference. Summaries are safe: no stack traces, raw payload dumps, or secret values.",
+    "fields": [
+        {
+            "name": "metadata",
+            "type": "com.tradingcapture.events.EventMetadata",
+            "doc": "Shared event envelope."
+        },
+        {
+            "name": "sourceType",
+            "type": "string",
+            "doc": "What sourceRef identifies: RAW_MESSAGE (parse-level failures) or ALLOCATION (validation/processing failures). String, not enum, so new source types stay BACKWARD-compatible."
+        },
+        {
+            "name": "sourceRef",
+            "type": "string",
+            "doc": "Reference to the failed unit: the raw_messages surrogate id (as a string) or the business allocId."
+        },
+        {
+            "name": "summary",
+            "type": "string",
+            "doc": "Safe one-line failure summary suitable for dashboards and alerts."
+        },
+        {
+            "name": "errors",
+            "type": {
+                "type": "array",
+                "items": "com.tradingcapture.events.ValidationErrorDetail"
+            },
+            "default": [],
+            "doc": "Typed error details where available; empty for failures without a field-level breakdown (e.g. retry exhaustion)."
+        }
+    ]
+}

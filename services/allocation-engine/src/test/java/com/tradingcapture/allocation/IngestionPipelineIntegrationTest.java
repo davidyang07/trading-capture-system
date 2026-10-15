@@ -189,7 +189,8 @@ class IngestionPipelineIntegrationTest extends AllocationIntegrationTestSupport 
         assertThat(stored).allMatch(e -> Objects.equals(e.getRawMessageId(), raw.getId()));
 
         // AllocTransType '9' is unsupported, so the message has no business identity:
-        // no allocation row is created and the errors link to the raw message only.
+        // no allocation row is created and the errors link to the raw message only. The
+        // rejection still names the AllocID the sender used.
         assertThat(allocations.findAll().stream()
                 .filter(a -> a.getAllocId().equals(allocId))).isEmpty();
         assertThat(stored).allMatch(e -> e.getAllocationId() == null);
@@ -204,7 +205,7 @@ class IngestionPipelineIntegrationTest extends AllocationIntegrationTestSupport 
                         .filter(e -> e.getRawMessageId() == raw.getId())
                         .toList();
         assertThat(rejections).hasSize(1);
-        assertThat(rejections.get(0).getAllocId()).isNull();
+        assertThat(rejections.get(0).getAllocId()).isEqualTo(allocId);
         assertThat(rejections.get(0).getErrors().size()).isGreaterThanOrEqualTo(5);
 
         assertThat(KafkaTestConsumers.drainAvro(EventTopics.ALLOCATION_RECEIVED).stream()

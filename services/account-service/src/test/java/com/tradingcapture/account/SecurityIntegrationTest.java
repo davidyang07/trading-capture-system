@@ -5,11 +5,14 @@ import com.tradingcapture.account.testsupport.IntegrationTestSupport;
 import com.tradingcapture.testsupport.TestTokenIssuer;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -62,5 +65,27 @@ class SecurityIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(get("/api/v1/accounts")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccountTestTokens.investorBearer("investor1")))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void anInvestorIsRefusedAdminMutationsBeforeTheBodyIsValidated() throws Exception {
+        String investor = "Bearer " + AccountTestTokens.investorBearer("investor1");
+        for (var request : List.of(
+                post("/api/v1/accounts/ACC-ANY/cash-transactions"),
+                post("/api/v1/accounts/ACC-ANY/security-transactions"),
+                put("/api/v1/accounts/ACC-ANY"))) {
+            mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, investor)
+                            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+        }
+    }
+
+    @Test
+    void anAdminSendingAnInvalidBodyStillGets400() throws Exception {
+        mockMvc.perform(post("/api/v1/accounts/ACC-ANY/cash-transactions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + AccountTestTokens.adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
     }
 }

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
+import java.util.List;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -106,5 +108,24 @@ class SecurityIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(get("/actuator/beans")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + admin))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void anInvestorIsRefusedExecutionWritesBeforeTheBodyIsValidated() throws Exception {
+        String investor = "Bearer " + TradingTestTokens.investorBearer("investor1");
+        for (String path : List.of("/api/v1/executions", "/api/v1/executions/1/correct", "/api/v1/executions/1/cancel")) {
+            mockMvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, investor)
+                            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+        }
+    }
+
+    @Test
+    void anAdminSendingAnInvalidExecutionStillGets400() throws Exception {
+        mockMvc.perform(post("/api/v1/executions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + TradingTestTokens.adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
     }
 }

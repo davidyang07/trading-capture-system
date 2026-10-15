@@ -9,11 +9,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+
+import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasAuthority;
+import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasRole;
+import static org.springframework.security.authorization.AuthorizationManagers.allOf;
 
 /**
  * OAuth2 resource-server configuration (Spring Security 6, ADR-0008). The mechanical beans
@@ -56,7 +62,21 @@ public class SecurityConfig {
                                 "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll();
                     }
                     auth.requestMatchers("/internal/**")
-                            .hasAnyAuthority("SCOPE_account:validate", "SCOPE_allocation:process")
+                            .hasAnyAuthority("SCOPE_account:validate", "SCOPE_allocation:process");
+                    // Mutations are also authorized here, before the request body is read: method security
+                    // runs only after the body is bound and validated, so a caller without the scope or
+                    // role would otherwise get a 400 about a body it may not send at all. The controllers'
+                    // @PreAuthorize rules stay in place and must agree with these.
+                    AuthorizationManager<RequestAuthorizationContext> accountAdmin =
+                            allOf(hasAuthority("SCOPE_account:admin"), hasRole("ADMIN"));
+                    AuthorizationManager<RequestAuthorizationContext> ledgerAdmin =
+                            allOf(hasAuthority("SCOPE_account:balance"), hasRole("ADMIN"));
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/accounts").hasAuthority("SCOPE_account:admin")
+                            .requestMatchers(HttpMethod.PUT, "/api/v1/accounts/*").access(accountAdmin)
+                            .requestMatchers(HttpMethod.POST, "/api/v1/accounts/*/activate",
+                                    "/api/v1/accounts/*/suspend", "/api/v1/accounts/*/close").access(accountAdmin)
+                            .requestMatchers(HttpMethod.POST, "/api/v1/accounts/*/cash-transactions",
+                                    "/api/v1/accounts/*/security-transactions").access(ledgerAdmin)
                             .anyRequest().authenticated();
                 })
                 .oauth2ResourceServer(oauth2 -> oauth2

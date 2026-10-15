@@ -99,8 +99,10 @@ export default function OrderDetailPage() {
       >
         {(detail) => {
           const order = detail.order;
-          const editable = order.status === "NEW";
-          const deletable = editable && detail.executions.length === 0;
+          // Any execution history, even fully cancelled, freezes the order.
+          const editable =
+            order.status === "NEW" && detail.executions.length === 0;
+          const deletable = editable;
 
           if (editing) {
             return (

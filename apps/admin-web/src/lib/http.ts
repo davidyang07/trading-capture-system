@@ -52,10 +52,56 @@ async function parseBody(response: Response): Promise<{
   }
 }
 
+const SESSION_ENDPOINT = "/api/auth/session";
+// The proxy's answer when the session's access token has expired. The request never
+// reached a service, so it can be retried once the session is refreshed.
+const TOKEN_EXPIRED = "TOKEN_EXPIRED";
+
+let sessionRefresh: Promise<void> | null = null;
+
+/**
+ * Reading the Auth.js session runs its jwt callback, which refreshes an expired access
+ * token and re-issues the session cookie. Concurrent callers share one refresh.
+ */
+function refreshSession(): Promise<void> {
+  if (!sessionRefresh) {
+    sessionRefresh = fetch(SESSION_ENDPOINT, {
+      cache: "no-store",
+      credentials: "same-origin",
+    })
+      .then(() => undefined, () => undefined)
+      .finally(() => {
+        sessionRefresh = null;
+      });
+  }
+  return sessionRefresh;
+}
+
 export async function apiFetch<T>(
   service: ServiceKey,
   path: string,
   options: RequestOptions = {}
+): Promise<T> {
+  try {
+    return await sendOnce<T>(service, path, options);
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      error.status === 401 &&
+      error.errorCode === TOKEN_EXPIRED &&
+      !options.signal?.aborted
+    ) {
+      await refreshSession();
+      return sendOnce<T>(service, path, options);
+    }
+    throw error;
+  }
+}
+
+async function sendOnce<T>(
+  service: ServiceKey,
+  path: string,
+  options: RequestOptions
 ): Promise<T> {
   const {
     method = "GET",

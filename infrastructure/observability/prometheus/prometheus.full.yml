@@ -16,14 +16,16 @@ scrape_configs:
 
   - job_name: tcs-services
     metrics_path: /actuator/prometheus
+    # The services serve actuator on their management port (MANAGEMENT_SERVER_PORT), which is
+    # reachable on the compose network only and never published to the host.
     # Each service emits an `application` common tag; honor_labels keeps it (see prometheus.yml).
     honor_labels: true
     static_configs:
-      - targets: ["trading-service:8081"]
+      - targets: ["trading-service:9081"]
         labels: { application: trading-service }
-      - targets: ["account-service:8082"]
+      - targets: ["account-service:9082"]
         labels: { application: account-service }
-      - targets: ["enrichment-service:8083"]
+      - targets: ["enrichment-service:9083"]
         labels: { application: enrichment-service }
-      - targets: ["allocation-engine:8084"]
+      - targets: ["allocation-engine:9084"]
         labels: { application: allocation-engine }

@@ -9,11 +9,19 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+
+import java.util.List;
+
+import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasAuthority;
+import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasRole;
+import static org.springframework.security.authorization.AuthorizationManagers.allOf;
 
 /**
  * OAuth2 resource-server configuration (Spring Security 6, ADR-0008). Mechanical beans come from
@@ -51,8 +59,17 @@ public class SecurityConfig {
                                 "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll();
                     }
                     auth.requestMatchers("/internal/**")
-                            .hasAnyAuthority("SCOPE_enrichment:read", "SCOPE_allocation:process")
-                            .anyRequest().authenticated();
+                            .hasAnyAuthority("SCOPE_enrichment:read", "SCOPE_allocation:process");
+                    // Mutations are also authorized here, before the request body is read: method security
+                    // runs only after the body is bound and validated, so a caller without the scope or
+                    // role would otherwise get a 400 about a body it may not send at all. The controllers'
+                    // @PreAuthorize rules stay in place and must agree with these.
+                    AuthorizationManager<RequestAuthorizationContext> admin =
+                            allOf(hasAuthority("SCOPE_enrichment:admin"), hasRole("ADMIN"));
+                    for (HttpMethod method : List.of(HttpMethod.POST, HttpMethod.PUT, HttpMethod.PATCH, HttpMethod.DELETE)) {
+                        auth.requestMatchers(method, "/api/**").access(admin); // every mutation here is administrative
+                    }
+                    auth.anyRequest().authenticated();
                 })
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(authenticationConverter))

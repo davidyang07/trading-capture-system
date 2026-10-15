@@ -38,7 +38,7 @@ ENV SPRING_PROFILES_ACTIVE=json-logs \
 # The temurin jammy image ships bash; /dev/tcp keeps the JRE layer dependency-free (same
 # technique the compose infra healthchecks use for images without curl/wget).
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=10 \
-  CMD ["/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && echo -e 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'UP' <&3"]
+  CMD ["/bin/bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/${MANAGEMENT_SERVER_PORT:-8081} && echo -e 'GET /actuator/health/readiness HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep -q 'UP' <&3"]
 # exec form so java replaces the shell as PID 1 and receives SIGTERM (Spring graceful shutdown).
 ENTRYPOINT ["/bin/bash", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]
 

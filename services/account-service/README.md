@@ -28,9 +28,10 @@ the API contract of record; the service-boundary and ledger rules are summarized
   (`SELECT … FOR UPDATE`), so simultaneous posts run one after the other. Each balance check sees
   the earlier posts, which prevents double-spend, and two valid posts both succeed. If the lock
   can't be taken in time, the post fails with a retryable 409 (`CONCURRENT_MODIFICATION`).
-- Machine-originated posts may carry an `idempotencyKey` (unique per account): a replay returns
+- Posts may carry an `idempotencyKey` (unique per account): a replay of the same posting returns
   the original row with **200** (rather than a duplicate + 201); the DB unique constraint is the
-  authority under races.
+  authority under races. Reusing a key for a *different* posting (any field differs) is refused
+  with 409 `IDEMPOTENCY_KEY_REUSED` instead of silently returning the original.
 
 **Machine batch validation (for allocation-engine / trading-service)**
 - `POST /internal/v1/accounts/batch` returns an independent verdict per item (existence, status,

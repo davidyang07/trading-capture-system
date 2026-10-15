@@ -40,4 +40,13 @@ class JsonConfigTest {
         assertThat(mapper.writeValueAsString(new Payload(new BigDecimal(exact))))
                 .isEqualTo("{\"notional\":\"" + exact + "\"}");
     }
+
+    @Test
+    void neverUsesExponentNotation() throws Exception {
+        record Payload(BigDecimal small, BigDecimal zero, BigDecimal stripped) { }
+
+        assertThat(mapper.writeValueAsString(new Payload(new BigDecimal("0.00000001"),
+                new BigDecimal("0E-8"), new BigDecimal("1E+3"))))
+                .isEqualTo("{\"small\":\"0.00000001\",\"zero\":\"0.00000000\",\"stripped\":\"1000\"}");
+    }
 }

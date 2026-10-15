@@ -2,6 +2,8 @@ package com.tradingcapture.observability;
 
 import jakarta.servlet.ServletException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.MDC;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -46,5 +48,29 @@ class CorrelationIdFilterTest {
         String echoed = response.getHeader(CorrelationId.HTTP_HEADER);
         assertThat(echoed).isNotBlank();
         assertThat(MDC.get(CorrelationId.MDC_KEY)).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc\r\nX-Injected: yes", "fake\n2026-01-01 ERROR forged log line", "has space", "a/b", "<script>"})
+    void replacesAnUnsafeCorrelationId(String unsafe) throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(CorrelationId.HTTP_HEADER, unsafe);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getHeader(CorrelationId.HTTP_HEADER)).isNotEqualTo(unsafe).matches("[0-9a-f-]{36}");
+    }
+
+    @Test
+    void replacesACorrelationIdLongerThanItsColumn() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader(CorrelationId.HTTP_HEADER, "a".repeat(65));
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, new MockFilterChain());
+
+        assertThat(response.getHeader(CorrelationId.HTTP_HEADER)).hasSize(36);
+        assertThat(CorrelationId.isSafe("a".repeat(64))).isTrue();
     }
 }

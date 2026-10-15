@@ -26,8 +26,9 @@ infrastructure is out of the app-tier scope; wire their Service DNS names in
 - **securityContext:** `runAsNonRoot` with an explicit numeric UID (matching the image),
   `readOnlyRootFilesystem: true` (writable `emptyDir` mounts only for `/tmp` and the Next cache),
   `allowPrivilegeEscalation: false`, `capabilities: drop [ALL]`, `seccompProfile: RuntimeDefault`.
-- **Network:** default-deny ingress; the unauthenticated `/actuator/prometheus` path is reachable
-  only from inside the namespace. Only admin-web is exposed
+- **Network:** default-deny ingress. Each backend serves actuator (probes, the unauthenticated
+  `/actuator/prometheus`) on a separate `management` port (`MANAGEMENT_SERVER_PORT`, API port +
+  1000) that its Service does not expose, so it is reachable only from inside the namespace. Only admin-web is exposed
   externally, and only from the ingress-controller namespace.
 - **allocation-engine** is pinned to `replicas: 1` with the `Recreate` strategy — its
   transactional-outbox poller must never run concurrently.

@@ -1,6 +1,6 @@
 package com.tradingcapture.account.config;
 
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializerBase;
 import org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -14,12 +14,28 @@ import java.math.BigDecimal;
  * an arbitrary-precision decimal: a consumer parsing {@code 12345678901234567.89} as a JSON
  * number has already lost the value before it can be inspected. Jackson's default is to emit
  * BigDecimal as a bare number, so the conversion must be registered explicitly.
+ *
+ * <p>The string is the plain form ({@link BigDecimal#toPlainString()}): {@code toString()} switches to
+ * exponent notation for small or rescaled values, so a zero at scale 8 would go out as
+ * {@code "0E-8"}, which most decimal parsers on the consumer side reject.</p>
  */
 @Configuration
 public class JsonConfig {
 
     @Bean
     public Jackson2ObjectMapperBuilderCustomizer decimalsAsStrings() {
-        return builder -> builder.serializerByType(BigDecimal.class, ToStringSerializer.instance);
+        return builder -> builder.serializerByType(BigDecimal.class, new PlainDecimalSerializer());
+    }
+
+    static final class PlainDecimalSerializer extends ToStringSerializerBase {
+
+        PlainDecimalSerializer() {
+            super(BigDecimal.class);
+        }
+
+        @Override
+        public String valueToString(Object value) {
+            return ((BigDecimal) value).toPlainString();
+        }
     }
 }

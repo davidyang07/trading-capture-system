@@ -27,6 +27,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -79,8 +80,16 @@ public class LedgerService {
             Optional<CashTransaction> existing =
                     cashTransactions.findByAccountIdAndIdempotencyKey(accountId, command.idempotencyKey());
             if (existing.isPresent()) {
+                CashTransaction original = existing.get();
+                requireSamePosting(accountId, command.idempotencyKey(),
+                        original.getDirection() == command.direction()
+                                && original.getTransactionType() == command.transactionType()
+                                && original.getAmount().compareTo(command.amount()) == 0
+                                && original.getCurrency().equals(command.currency())
+                                && Objects.equals(original.getExternalRef(), command.externalRef())
+                                && Objects.equals(original.getDescription(), command.description()));
                 metrics.idempotentReplay();
-                return LedgerPost.replayed(existing.get());
+                return LedgerPost.replayed(original);
             }
         }
 
@@ -125,8 +134,16 @@ public class LedgerService {
             Optional<SecurityTransaction> existing =
                     securityTransactions.findByAccountIdAndIdempotencyKey(accountId, command.idempotencyKey());
             if (existing.isPresent()) {
+                SecurityTransaction original = existing.get();
+                requireSamePosting(accountId, command.idempotencyKey(),
+                        original.getDirection() == command.direction()
+                                && original.getTransactionType() == command.transactionType()
+                                && original.getInstrumentId().equals(command.instrumentId())
+                                && original.getQuantity().compareTo(command.quantity()) == 0
+                                && Objects.equals(original.getExternalRef(), command.externalRef())
+                                && Objects.equals(original.getDescription(), command.description()));
                 metrics.idempotentReplay();
-                return LedgerPost.replayed(existing.get());
+                return LedgerPost.replayed(original);
             }
         }
 
@@ -193,6 +210,18 @@ public class LedgerService {
         Account account = accounts.findById(accountId)
                 .orElseThrow(() -> ResourceNotFoundException.account(accountId));
         ctx.requireVisible(account);
+    }
+
+    /**
+     * A replay must repeat the original request. Reusing a key for a different posting is a client
+     * bug; answering with the original row would silently drop the new posting.
+     */
+    private static void requireSamePosting(String accountId, String idempotencyKey, boolean samePosting) {
+        if (!samePosting) {
+            throw new BusinessRuleException(ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                    "Idempotency key " + idempotencyKey + " was already used for a different posting on account "
+                            + accountId);
+        }
     }
 
     private static void requireActive(Account account) {

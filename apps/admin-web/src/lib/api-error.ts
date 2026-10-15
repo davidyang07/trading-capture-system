@@ -142,7 +142,8 @@ function isProblem(value: unknown): value is Problem {
 const CONFLICT_MESSAGES: Record<string, string> = {
   DUPLICATE_ORDER_ID: "An order with this ID already exists.",
   ORDER_NOT_ELIGIBLE: "Only orders in NEW status can be changed.",
-  ORDER_HAS_EXECUTIONS: "This order has executions and cannot be deleted.",
+  ORDER_HAS_EXECUTIONS:
+    "This order has execution history, so it can no longer be edited or deleted.",
   ORDER_ALREADY_FILLED: "This order is already fully filled.",
   EXECUTION_OVERFILL: "This fill exceeds the order's remaining quantity.",
   EXECUTION_TARGET_SUPERSEDED:

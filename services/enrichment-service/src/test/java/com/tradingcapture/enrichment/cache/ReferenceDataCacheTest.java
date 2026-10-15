@@ -100,4 +100,20 @@ class ReferenceDataCacheTest {
         verify(redis).delete(List.of("k1", "k2"));
         verify(metrics).cacheEviction();
     }
+
+    @Test
+    void evictInsideATransactionDeletesAgainAfterCommit() {
+        org.springframework.transaction.support.TransactionSynchronizationManager.initSynchronization();
+        try {
+            cache.evict("k1");
+            verify(redis, org.mockito.Mockito.times(1)).delete(List.of("k1"));
+
+            // A reader may have re-cached the old row before the commit; the commit evicts it again.
+            org.springframework.transaction.support.TransactionSynchronizationManager.getSynchronizations()
+                    .forEach(org.springframework.transaction.support.TransactionSynchronization::afterCommit);
+            verify(redis, org.mockito.Mockito.times(2)).delete(List.of("k1"));
+        } finally {
+            org.springframework.transaction.support.TransactionSynchronizationManager.clearSynchronization();
+        }
+    }
 }

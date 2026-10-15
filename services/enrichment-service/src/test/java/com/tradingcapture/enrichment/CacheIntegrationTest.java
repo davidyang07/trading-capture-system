@@ -58,6 +58,54 @@ class CacheIntegrationTest extends IntegrationTestSupport {
     }
 
     @Test
+    void anInstrumentReadWithDifferentCaseIsInvalidatedByAnUpdate() throws Exception {
+        createInstrument("""
+                { "instrumentId": "MSFT", "name": "Microsoft", "instrumentType": "EQUITY",
+                  "exchangeMic": "XNAS", "currencyCode": "USD", "identifiers": [] }
+                """).andExpect(status().isCreated());
+        // Read with a lower-case id: the primary key is case-insensitive, so this is MSFT.
+        mockMvc.perform(get("/api/v1/instruments/msft").header(HttpHeaders.AUTHORIZATION, "Bearer " + reader()))
+                .andExpect(jsonPath("$.name").value("Microsoft"));
+
+        mockMvc.perform(put("/api/v1/instruments/MSFT")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + EnrichmentTestTokens.adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "name": "Microsoft Corp", "instrumentType": "EQUITY", "exchangeMic": "XNAS",
+                                  "currencyCode": "USD", "identifiers": [] }
+                                """))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/instruments/msft").header(HttpHeaders.AUTHORIZATION, "Bearer " + reader()))
+                .andExpect(jsonPath("$.name").value("Microsoft Corp"));
+    }
+
+    @Test
+    void creatingASecondListingMakesACachedUnscopedSymbolLookupAmbiguous() throws Exception {
+        createInstrument("""
+                { "instrumentId": "XYZ.L", "name": "XYZ London", "instrumentType": "EQUITY",
+                  "exchangeMic": "XLON", "currencyCode": "GBP",
+                  "identifiers": [ { "source": "EXCHANGE_SYMBOL", "value": "XYZ" } ] }
+                """).andExpect(status().isCreated());
+        mockMvc.perform(get("/api/v1/instruments/by-identifier")
+                        .param("source", "EXCHANGE_SYMBOL").param("value", "XYZ")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + reader()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.instrumentId").value("XYZ.L")); // cached as the only match
+
+        createInstrument("""
+                { "instrumentId": "XYZ.OQ", "name": "XYZ Nasdaq", "instrumentType": "EQUITY",
+                  "exchangeMic": "XNAS", "currencyCode": "USD",
+                  "identifiers": [ { "source": "EXCHANGE_SYMBOL", "value": "XYZ" } ] }
+                """).andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/v1/instruments/by-identifier")
+                        .param("source", "EXCHANGE_SYMBOL").param("value", "XYZ")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + reader()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errorCode").value("AMBIGUOUS_IDENTIFIER"));
+    }
+
+    @Test
     void currencyLookupIsCachedThenInvalidatedOnUpdate() throws Exception {
         mockMvc.perform(get("/api/v1/currencies/USD").header(HttpHeaders.AUTHORIZATION, "Bearer " + reader()))
                 .andExpect(jsonPath("$.name").value("US Dollar"));

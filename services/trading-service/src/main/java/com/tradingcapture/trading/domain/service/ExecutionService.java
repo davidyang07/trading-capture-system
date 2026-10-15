@@ -246,7 +246,9 @@ public class ExecutionService {
                 .leavesQty(order.getLeavesQty())
                 .avgPx(aggregates.avgPx())
                 .currency(target.getCurrency())
-                .tradeDate(LocalDate.now(clock.withZone(ZoneOffset.UTC)))
+                // A correction or cancellation amends the same trade: it keeps the trade's date
+                // (and settlement terms); only transactTime records when the amendment happened.
+                .tradeDate(target.getTradeDate())
                 .transactTime(now)
                 .settleType(target.getSettleType())
                 .settleDate(target.getSettleDate())

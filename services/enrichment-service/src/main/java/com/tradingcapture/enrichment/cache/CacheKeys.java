@@ -13,8 +13,9 @@ public final class CacheKeys {
     private CacheKeys() {
     }
 
+    /** Case-insensitive like the instruments primary key, so "aapl" and "AAPL" share one entry. */
     public static String instrument(String instrumentId) {
-        return PREFIX + "instrument:" + instrumentId;
+        return PREFIX + "instrument:" + norm(instrumentId);
     }
 
     public static String identifier(IdentifierSource source, String value, String exchangeMic) {

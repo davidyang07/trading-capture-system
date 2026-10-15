@@ -33,9 +33,10 @@ import java.util.List;
  * <ul>
  *   <li>Owner subject always comes from the {@link AccessContext} (the verified JWT).</li>
  *   <li>Non-privileged callers only ever see or touch their own orders (masked as 404).</li>
- *   <li>Update and delete require status NEW; delete additionally requires that no execution
- *       row references the order — cancelled history still blocks deletion, and the DB
- *       FK (ON DELETE RESTRICT) backs the rule up.</li>
+ *   <li>Update and delete require status NEW and that no execution row references the order.
+ *       An order whose fills were all cancelled is NEW again, but its cancelled history still
+ *       blocks both: editing it would leave that history describing a different instrument,
+ *       side or account. For delete, the DB FK (ON DELETE RESTRICT) backs the rule up.</li>
  * </ul>
  */
 @Service
@@ -141,6 +142,10 @@ public class OrderService {
         if (!order.isNew()) {
             throw new BusinessRuleException(ErrorCode.ORDER_NOT_ELIGIBLE,
                     "Only NEW orders may be updated; order " + orderId + " is " + order.getStatus());
+        }
+        if (executions.existsByOrderOrderId(orderId)) {
+            throw new BusinessRuleException(ErrorCode.ORDER_HAS_EXECUTIONS,
+                    "Order " + orderId + " has execution history and cannot be updated");
         }
         BigDecimal quantity = normalizeQuantity(command.quantity());
         if (quantity.compareTo(order.getCumQty()) < 0) {

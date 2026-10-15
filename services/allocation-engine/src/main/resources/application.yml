@@ -4,6 +4,13 @@ server:
 spring:
   application:
     name: allocation-engine
+  task:
+    scheduling:
+      pool:
+        # One thread per @Scheduled job (OutboxPoller, OrchestrationDriver). With Spring's default of
+        # one, an orchestration pass stuck in dependency retries also held back every outbox publish.
+        size: 2
+      thread-name-prefix: tcs-sched-
   datasource:
     # Host port 3307: this machine's local mysqld owns 3306 (docs/status/known-gaps.md).
     url: jdbc:mysql://${ALLOCATION_DB_HOST:localhost}:${ALLOCATION_DB_PORT:3307}/${ALLOCATION_DB_NAME:tcs_allocation}?connectionTimeZone=UTC
@@ -147,7 +154,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus,metrics
+        include: health,info,prometheus
   metrics:
     distribution:
       percentiles-histogram:

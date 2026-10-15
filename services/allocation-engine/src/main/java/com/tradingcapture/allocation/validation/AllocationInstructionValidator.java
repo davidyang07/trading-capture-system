@@ -13,6 +13,7 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Collect-all field validation for AllocationInstruction (35=J) — ADR-0012. Accumulates
@@ -28,6 +29,12 @@ import java.util.Set;
 public class AllocationInstructionValidator {
 
     private static final Set<String> SUPPORTED_TRANS_TYPES = Set.of("0", "1", "2");
+
+    /**
+     * FIX float: digits with an optional sign and decimal point. Exponent notation ("1E+3"), which
+     * {@link BigDecimal} would otherwise accept, is not a FIX float.
+     */
+    private static final Pattern FIX_FLOAT = Pattern.compile("-?(\\d+(\\.\\d*)?|\\.\\d+)");
     private static final Set<String> SUPPORTED_SIDES = Set.of("1", "2");
 
     // Money/quantity values persist as DECIMAL(19,4), prices as DECIMAL(19,8) (ADR-0014):
@@ -109,6 +116,7 @@ public class AllocationInstructionValidator {
                     ref(71, m.allocTransType()), ref(72, null)));
         }
 
+        validateGroupCounts(errors, m.groupCounts());
         validateOrders(errors, m.orders());
         validateExecutions(errors, m.executions());
         BigDecimal allocQtySum = validateAccounts(errors, m.accounts());
@@ -123,6 +131,28 @@ public class AllocationInstructionValidator {
         }
 
         return errors;
+    }
+
+    /** A NumInGroup that disagrees with the entries present means entries were lost or invented. */
+    private void validateGroupCounts(List<CollectedError> errors, List<ExtractedAllocation.GroupCount> counts) {
+        for (ExtractedAllocation.GroupCount count : counts) {
+            if (!declares(count.declared(), count.parsed())) {
+                String where = count.ownerEntry() == null ? ""
+                        : " in " + fieldName(78) + " entry " + (count.ownerEntry() + 1);
+                errors.add(CollectedError.of(ValidationErrorCode.CONFLICTING_FIELDS,
+                        fieldName(count.countTag()) + " (" + count.countTag() + ") declares " + count.declared()
+                                + " entries but the message carries " + count.parsed() + where,
+                        ref(count.countTag(), count.declared())));
+            }
+        }
+    }
+
+    private static boolean declares(String declared, int parsed) {
+        try {
+            return Integer.parseInt(declared.strip()) == parsed;
+        } catch (NumberFormatException e) {
+            return false;
+        }
     }
 
     private void validateOrders(List<CollectedError> errors, List<ExtractedAllocation.Order> orders) {
@@ -206,14 +236,12 @@ public class AllocationInstructionValidator {
         if (raw == null) {
             return null;
         }
-        BigDecimal value;
-        try {
-            value = new BigDecimal(raw);
-        } catch (NumberFormatException e) {
+        if (!FIX_FLOAT.matcher(raw).matches()) {
             errors.add(CollectedError.of(ValidationErrorCode.INVALID_VALUE_FORMAT,
                     fieldName(tag) + " is not a valid number", ref(tag, raw)));
             return null;
         }
+        BigDecimal value = new BigDecimal(raw);
         BigDecimal normalized = value.stripTrailingZeros();
         if (normalized.scale() > maxScale) {
             errors.add(CollectedError.of(ValidationErrorCode.INVALID_VALUE_FORMAT,
@@ -221,7 +249,8 @@ public class AllocationInstructionValidator {
                     ref(tag, raw)));
             return null;
         }
-        int integerDigits = normalized.precision() - Math.max(normalized.scale(), 0);
+        // precision − scale: a negative scale counts as integer digits too (1E+19 has 20 of them).
+        int integerDigits = normalized.precision() - normalized.scale();
         if (integerDigits > FixValues.DECIMAL_PRECISION - maxScale) {
             errors.add(CollectedError.of(ValidationErrorCode.VALUE_OUT_OF_BOUND,
                     fieldName(tag) + " exceeds the supported magnitude of "

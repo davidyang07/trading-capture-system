@@ -65,7 +65,7 @@ class IngestionEventFactoryTest {
                 ValidationErrorCode.MISSING_REQUIRED_FIELD, "AllocID (70) is required",
                 new CollectedError.FieldRef(70, "AllocID", null)));
 
-        AllocationRejected event = factory.allocationRejected(7L, null, errors, "corr-def");
+        AllocationRejected event = factory.allocationRejected(7L, null, "7", errors, "corr-def");
 
         assertThat(event.getAllocId()).isNull();
         assertThat(event.getMetadata().getAggregateId()).isEqualTo("7");
@@ -73,6 +73,18 @@ class IngestionEventFactoryTest {
         assertThat(event.getErrors().get(0).getErrorCode()).isEqualTo("MISSING_REQUIRED_FIELD");
         assertThat(event.getErrors().get(0).getFields().get(0).getFieldName()).isEqualTo("AllocID");
         assertThat(event.getErrors().get(0).getFields().get(0).getFieldValue()).isNull();
+    }
+
+    @Test
+    void rejectionWithoutAnAllocationRowStillNamesTheSendersAllocId() {
+        List<CollectedError> errors = List.of(CollectedError.of(
+                ValidationErrorCode.VALUE_NOT_SUPPORTED, "AllocTransType must be 0, 1 or 2",
+                new CollectedError.FieldRef(71, "AllocTransType", "9")));
+
+        AllocationRejected event = factory.allocationRejected(7L, "ALLOC-9", "7", errors, "corr-def");
+
+        assertThat(event.getAllocId()).isEqualTo("ALLOC-9");
+        assertThat(event.getMetadata().getAggregateId()).isEqualTo("7");
     }
 
     @Test

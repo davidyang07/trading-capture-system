@@ -159,11 +159,14 @@ public class AllocationIngestionService {
         String summary = errors.size() + " field validation error(s); first: " + errors.get(0).message();
         raw.markInvalid(truncate(summary), now);
 
-        AllocationRejected rejected = events.allocationRejected(
-                raw.getId(), allocId, errors, raw.getCorrelationId());
+        // Without a row (e.g. an unsupported AllocTransType) the rejection still names the AllocID the
+        // sender used, when it was readable, so the sender can match the rejection to its message.
+        String aggregateId = allocId != null ? allocId : String.valueOf(raw.getId());
+        AllocationRejected rejected = events.allocationRejected(raw.getId(),
+                allocId != null ? allocId : readableAllocId(extracted, errors), aggregateId,
+                errors, raw.getCorrelationId());
         outbox.record(rejected.getMetadata(), rejected, EventTopics.ALLOCATION_REJECTED,
-                allocId != null ? allocId : String.valueOf(raw.getId()),
-                allocId != null ? AGGREGATE_ALLOCATION : AGGREGATE_RAW_MESSAGE);
+                aggregateId, allocId != null ? AGGREGATE_ALLOCATION : AGGREGATE_RAW_MESSAGE);
 
         String sourceType = allocId != null
                 ? IngestionEventFactory.SOURCE_ALLOCATION : IngestionEventFactory.SOURCE_RAW_MESSAGE;
@@ -176,6 +179,14 @@ public class AllocationIngestionService {
         log.info("allocation rejected by field validation [allocId={} rawMessageId={} errors={}]",
                 allocId, raw.getId(), errors.size());
         return IngestionOutcome.INVALID;
+    }
+
+    /** The AllocID (70) as sent, unless absent or itself one of the validation errors. */
+    private static String readableAllocId(ExtractedAllocation extracted, List<CollectedError> errors) {
+        boolean allocIdInError = errors.stream()
+                .flatMap(error -> error.fields().stream())
+                .anyMatch(field -> Integer.valueOf(70).equals(field.fieldId()));
+        return extracted.allocId() == null || allocIdInError ? null : extracted.allocId();
     }
 
     private IngestionOutcome parseFailure(RawMessage raw, FailureCategory category,

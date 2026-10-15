@@ -82,6 +82,79 @@ describe("apiFetch", () => {
     });
   });
 
+  it("refreshes the session and retries once when the proxy reports an expired token", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse(401, { status: 401, errorCode: "TOKEN_EXPIRED" })
+      )
+      .mockResolvedValueOnce(jsonResponse(200, { user: {} }))
+      .mockResolvedValueOnce(jsonResponse(201, { orderId: "ORD-1" }));
+
+    const result = await apiFetch<{ orderId: string }>("trading", "api/v1/orders", {
+      method: "POST",
+      body: { quantity: "10" },
+    });
+
+    expect(result).toEqual({ orderId: "ORD-1" });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/auth/session");
+    expect(fetchMock.mock.calls[2][0]).toBe("/api/proxy/trading/api/v1/orders");
+    expect(fetchMock.mock.calls[2][1]).toEqual(
+      expect.objectContaining({ method: "POST", body: '{"quantity":"10"}' })
+    );
+  });
+
+  it("retries an expired token only once", async () => {
+    const expired = () =>
+      jsonResponse(401, { status: 401, errorCode: "TOKEN_EXPIRED" });
+    fetchMock
+      .mockResolvedValueOnce(expired())
+      .mockResolvedValueOnce(jsonResponse(200, {}))
+      .mockResolvedValueOnce(expired());
+
+    await expect(apiFetch("trading", "api/v1/orders")).rejects.toMatchObject({
+      kind: "unauthenticated",
+      errorCode: "TOKEN_EXPIRED",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("shares one session refresh between concurrent expired requests", async () => {
+    const expired = () =>
+      jsonResponse(401, { status: 401, errorCode: "TOKEN_EXPIRED" });
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url === "/api/auth/session") {
+        // Still in flight when the second request finds its token expired.
+        return new Promise((resolve) =>
+          setTimeout(() => resolve(jsonResponse(200, {})), 20)
+        );
+      }
+      const proxied = fetchMock.mock.calls.filter(([u]) => u === url).length;
+      return proxied <= 1 ? expired() : jsonResponse(200, { url });
+    });
+
+    await Promise.all([
+      apiFetch("trading", "api/v1/orders"),
+      apiFetch("account", "api/v1/accounts"),
+    ]);
+
+    const refreshes = fetchMock.mock.calls.filter(
+      ([u]) => u === "/api/auth/session"
+    );
+    expect(refreshes).toHaveLength(1);
+  });
+
+  it("does not retry a plain 401", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse(401, { status: 401, errorCode: "UNAUTHORIZED" })
+    );
+
+    await expect(apiFetch("trading", "api/v1/orders")).rejects.toBeInstanceOf(
+      ApiError
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("maps a 409 problem, keeping errorCode and correlationId", async () => {
     fetchMock.mockResolvedValue(
       jsonResponse(

@@ -6,8 +6,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
+import java.util.List;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -52,5 +55,25 @@ class SecurityIntegrationTest extends IntegrationTestSupport {
         mockMvc.perform(get("/api/v1/currencies")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + EnrichmentTestTokens.readerBearer()))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void readScopeIsRefusedMutationsBeforeTheBodyIsValidated() throws Exception {
+        String reader = "Bearer " + EnrichmentTestTokens.readerBearer();
+        for (var request : List.of(post("/api/v1/instruments"), post("/api/v1/fee-rules"),
+                put("/api/v1/currencies/EUR"), post("/api/v1/settlement-options"))) {
+            mockMvc.perform(request.header(HttpHeaders.AUTHORIZATION, reader)
+                            .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                    .andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.errorCode").value("FORBIDDEN"));
+        }
+    }
+
+    @Test
+    void anAdminSendingAnInvalidBodyStillGets400() throws Exception {
+        mockMvc.perform(post("/api/v1/currencies")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + EnrichmentTestTokens.adminBearer())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
     }
 }

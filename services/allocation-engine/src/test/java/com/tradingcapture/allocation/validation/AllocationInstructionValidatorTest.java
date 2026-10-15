@@ -145,6 +145,53 @@ class AllocationInstructionValidatorTest {
     }
 
     @Test
+    void anIntegerTooWideForItsColumnIsOutOfBoundEvenWithTrailingZeros() {
+        // 10^19 normalizes to 1E+19 (precision 1, scale −19): its 20 integer digits must still count.
+        List<CollectedError> errors = validator.validate(
+                withDefaults().quantity("10000000000000000000").build());
+
+        assertThat(errors).extracting(CollectedError::code)
+                .containsExactly(ValidationErrorCode.VALUE_OUT_OF_BOUND);
+    }
+
+    @Test
+    void exponentNotationIsNotAFixFloat() {
+        for (String notFixFloat : List.of("1E+2", "1e2", "1E+999999999", "+100", " 100", "100 ", "1_000")) {
+            List<CollectedError> errors = validator.validate(withDefaults().quantity(notFixFloat).build());
+
+            assertThat(errors).as(notFixFloat).extracting(CollectedError::code)
+                    .containsExactly(ValidationErrorCode.INVALID_VALUE_FORMAT);
+        }
+        for (String fixFloat : List.of("100", "100.", "100.0000", "-0.5", ".5")) {
+            assertThat(validator.validate(withDefaults().quantity(fixFloat).build()))
+                    .as(fixFloat)
+                    .allMatch(e -> e.code() != ValidationErrorCode.INVALID_VALUE_FORMAT);
+        }
+    }
+
+    @Test
+    void aGroupCountLargerThanItsEntriesIsAConflict() {
+        // NoAllocs=3 with two entries: QuickFIX/J parses the two silently; the third is lost.
+        String wire = FixTestMessages.validNewAllocation().replace("\u000178=2\u0001", "\u000178=3\u0001");
+
+        List<CollectedError> errors = validator.validate(extract(wire));
+
+        assertThat(errors).hasSize(1);
+        assertThat(errors.get(0).code()).isEqualTo(ValidationErrorCode.CONFLICTING_FIELDS);
+        assertThat(errors.get(0).message()).contains("NoAllocs (78) declares 3 entries but the message carries 2");
+    }
+
+    @Test
+    void aNestedGroupCountSmallerThanItsEntriesIsAConflict() {
+        String wire = FixTestMessages.validNewAllocation().replace("\u0001136=2\u0001", "\u0001136=1\u0001");
+
+        List<CollectedError> errors = validator.validate(extract(wire));
+
+        assertThat(errors).extracting(CollectedError::message)
+                .containsExactly("NoMiscFees (136) declares 1 entries but the message carries 2 in NoAllocs entry 1");
+    }
+
+    @Test
     void identifiersLongerThanTheirStorageColumnsAreOutOfBound() {
         // Regression (backend review): alloc_id is VARCHAR(64); longer values previously
         // overflowed at INSERT time and burned retries as a fake transient failure.

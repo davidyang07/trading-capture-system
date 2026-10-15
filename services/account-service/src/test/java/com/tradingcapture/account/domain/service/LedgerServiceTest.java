@@ -145,6 +145,24 @@ class LedgerServiceTest {
     }
 
     @Test
+    void reusingAnIdempotencyKeyForADifferentPostingIsRefused() {
+        when(accounts.findByIdForUpdate("ACC-1")).thenReturn(Optional.of(activeAccount("investor1")));
+        CashTransaction existing = new CashTransaction("CT-1", "ACC-1", CashDirection.CREDIT,
+                CashTransactionType.DEPOSIT, new BigDecimal("1000.0000"), "USD", null, "idem-1", null, CLOCK.instant());
+        when(cashTransactions.findByAccountIdAndIdempotencyKey("ACC-1", "idem-1")).thenReturn(Optional.of(existing));
+
+        LedgerCommands.PostCash differentAmount = new LedgerCommands.PostCash(CashDirection.CREDIT,
+                CashTransactionType.DEPOSIT, new BigDecimal("5000.00"), "USD", null, "idem-1", null);
+
+        assertThatThrownBy(() -> service().postCash(investor("investor1"), "ACC-1", differentAmount))
+                .isInstanceOf(BusinessRuleException.class)
+                .satisfies(e -> assertThat(((BusinessRuleException) e).errorCode())
+                        .isEqualTo(ErrorCode.IDEMPOTENCY_KEY_REUSED));
+        verify(cashTransactions, never()).save(any());
+        verify(metrics, never()).idempotentReplay();
+    }
+
+    @Test
     void deliveryIsRejectedWhenPositionIsInsufficient() {
         when(accounts.findByIdForUpdate("ACC-1")).thenReturn(Optional.of(activeAccount("investor1")));
         when(balanceService.securityPosition("ACC-1", "AAPL")).thenReturn(new BigDecimal("50.0000"));

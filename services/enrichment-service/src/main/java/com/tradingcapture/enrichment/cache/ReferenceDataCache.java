@@ -8,6 +8,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -82,7 +84,24 @@ public class ReferenceDataCache {
         }
     }
 
+    /**
+     * Evicts now and, inside a transaction, again after it commits. Until the commit, a concurrent
+     * reader still sees the old row in the database and may put it back into the cache; the second
+     * eviction removes that stale copy instead of letting it live for the whole TTL.
+     */
     public void evict(String... keys) {
+        delete(keys);
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    delete(keys);
+                }
+            });
+        }
+    }
+
+    private void delete(String... keys) {
         try {
             redis.delete(Arrays.asList(keys));
             metrics.cacheEviction();

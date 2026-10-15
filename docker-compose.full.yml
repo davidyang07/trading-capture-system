@@ -50,6 +50,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: json-logs,demo-seed
+      MANAGEMENT_SERVER_PORT: "9081" # actuator stays on the compose network, never published
       SERVICE_NAME: trading-service
       TRADING_DB_HOST: mysql
       TRADING_DB_PORT: "3306"
@@ -58,7 +59,7 @@ services:
       OIDC_ISSUER: http://localhost:8180/realms/tcs
       OIDC_JWK_SET_URI: http://keycloak:8180/realms/tcs/protocol/openid-connect/certs
     ports:
-      - "8081:8081"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:8081:8081"
 
   account-service:
     build:
@@ -73,6 +74,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: json-logs,demo-seed
+      MANAGEMENT_SERVER_PORT: "9082" # actuator stays on the compose network, never published
       SERVICE_NAME: account-service
       ACCOUNT_DB_HOST: mysql
       ACCOUNT_DB_PORT: "3306"
@@ -81,7 +83,7 @@ services:
       OIDC_ISSUER: http://localhost:8180/realms/tcs
       OIDC_JWK_SET_URI: http://keycloak:8180/realms/tcs/protocol/openid-connect/certs
     ports:
-      - "8082:8082"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:8082:8082"
 
   enrichment-service:
     build:
@@ -98,6 +100,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: json-logs,demo-seed
+      MANAGEMENT_SERVER_PORT: "9083" # actuator stays on the compose network, never published
       SERVICE_NAME: enrichment-service
       ENRICHMENT_DB_HOST: mysql
       ENRICHMENT_DB_PORT: "3306"
@@ -108,7 +111,7 @@ services:
       OIDC_ISSUER: http://localhost:8180/realms/tcs
       OIDC_JWK_SET_URI: http://keycloak:8180/realms/tcs/protocol/openid-connect/certs
     ports:
-      - "8083:8083"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:8083:8083"
 
   allocation-engine:
     build:
@@ -135,6 +138,7 @@ services:
         condition: service_healthy
     environment:
       SPRING_PROFILES_ACTIVE: json-logs
+      MANAGEMENT_SERVER_PORT: "9084" # actuator stays on the compose network, never published
       SERVICE_NAME: allocation-engine
       ALLOCATION_DB_HOST: mysql
       ALLOCATION_DB_PORT: "3306"
@@ -153,7 +157,7 @@ services:
       ENRICHMENT_SERVICE_URL: http://enrichment-service:8083
       TRADING_SERVICE_URL: http://trading-service:8081
     ports:
-      - "8084:8084"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:8084:8084"
 
   # Opt-in fully-containerized admin-web (demo only): `docker compose --profile ui ...`.
   # The tested UI-E2E path runs admin-web on the host (Playwright webServer); see README.
@@ -187,4 +191,4 @@ services:
       ENRICHMENT_SERVICE_URL: http://enrichment-service:8083
       ALLOCATION_ENGINE_URL: http://allocation-engine:8084
     ports:
-      - "3000:3000"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:3000:3000"

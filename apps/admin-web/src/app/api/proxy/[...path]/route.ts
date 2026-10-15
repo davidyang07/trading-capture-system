@@ -12,6 +12,8 @@ export const dynamic = "force-dynamic";
 const CORRELATION_HEADER = "X-Correlation-ID";
 const CORRELATION_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const UPSTREAM_TIMEOUT_MS = 15_000;
+// An access token this close to expiry could lapse on its way to the service.
+const EXPIRY_SKEW_SECONDS = 5;
 // Explicit allow-list prevents internal redirects, cookies, server details, and
 // hop-by-hop headers from crossing the BFF boundary.
 const FORWARDED_RESPONSE_HEADERS = new Set([
@@ -40,6 +42,7 @@ function problem(
 
 async function readAccessToken(req: NextRequest): Promise<{
   accessToken?: string;
+  expiresAt?: number;
   error?: string;
 }> {
   const secret = process.env.AUTH_SECRET;
@@ -57,7 +60,11 @@ async function readAccessToken(req: NextRequest): Promise<{
     cookieName,
     salt: cookieName,
   });
-  return { accessToken: token?.accessToken, error: token?.error };
+  return {
+    accessToken: token?.accessToken,
+    expiresAt: token?.expiresAt,
+    error: token?.error,
+  };
 }
 
 async function handle(
@@ -78,11 +85,18 @@ async function handle(
     return problem(404, "NOT_FOUND", "Unknown proxy target");
   }
 
-  const { accessToken, error } = await readAccessToken(req);
+  const { accessToken, expiresAt, error } = await readAccessToken(req);
   const ended = req.cookies.has(SESSION_ENDED_COOKIE);
   if (ended || error === "RefreshAccessTokenError" || !accessToken) {
     // Session missing, ended by logout, or its refresh failed — force re-authentication.
     return problem(401, "UNAUTHORIZED", "Not authenticated");
+  }
+  // This handler only reads the session cookie; refreshing happens in Auth.js, which
+  // middleware runs for pages but not for /api. An expired token is therefore refused
+  // here, before anything reaches a service, and the browser client refreshes the
+  // session (GET /api/auth/session) and retries once — safe even for a POST.
+  if (expiresAt && Date.now() >= (expiresAt - EXPIRY_SKEW_SECONDS) * 1000) {
+    return problem(401, "TOKEN_EXPIRED", "Access token expired");
   }
 
   const requestedCorrelationId = req.headers.get(CORRELATION_HEADER);

@@ -58,4 +58,23 @@ describe("sanitizeRelativePath (open-redirect guard)", () => {
     expect(sanitizeRelativePath("/\\evil.example")).toBe("/dashboard");
     expect(sanitizeRelativePath(undefined)).toBe("/dashboard");
   });
+
+  it("rejects paths a browser would turn into another origin", () => {
+    // Browsers drop tabs and newlines from URLs: "/\t/evil" is "//evil".
+    expect(sanitizeRelativePath("/\t/evil.example")).toBe("/dashboard");
+    expect(sanitizeRelativePath("/\n/evil.example")).toBe("/dashboard");
+    expect(sanitizeRelativePath("/\r\n/evil.example")).toBe("/dashboard");
+    expect(sanitizeRelativePath("/ /evil.example")).toBe("/dashboard");
+    expect(sanitizeRelativePath("/\u0000/evil.example")).toBe("/dashboard");
+    expect(sanitizeRelativePath(decodeURIComponent("/%09/evil.example"))).toBe(
+      "/dashboard"
+    );
+  });
+
+  it("keeps encoded characters that stay on this origin", () => {
+    expect(sanitizeRelativePath("/orders?q=a%20b")).toBe("/orders?q=a%20b");
+    expect(sanitizeRelativePath("/%2F%2Fevil.example")).toBe(
+      "/%2F%2Fevil.example"
+    );
+  });
 });

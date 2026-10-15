@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -17,6 +18,11 @@ import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.SupplierJwtDecoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
+
+import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasAuthority;
+import static org.springframework.security.authorization.AuthorityAuthorizationManager.hasRole;
+import static org.springframework.security.authorization.AuthorizationManagers.allOf;
 
 /**
  * OAuth2 resource-server configuration (Spring Security 6, ADR-0008).
@@ -53,7 +59,18 @@ public class SecurityConfig {
                         auth.requestMatchers(HttpMethod.GET,
                                 "/v3/api-docs", "/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll();
                     }
-                    auth.requestMatchers("/internal/**").hasAuthority("SCOPE_allocation:process")
+                    auth.requestMatchers("/internal/**").hasAuthority("SCOPE_allocation:process");
+                    // Mutations are also authorized here, before the request body is read: method security
+                    // runs only after the body is bound and validated, so a caller without the scope or
+                    // role would otherwise get a 400 about a body it may not send at all. The controllers'
+                    // @PreAuthorize rules stay in place and must agree with these.
+                    AuthorizationManager<RequestAuthorizationContext> executionAdmin =
+                            allOf(hasAuthority("SCOPE_execution:write"), hasRole("ADMIN"));
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/orders").hasAuthority("SCOPE_order:create")
+                            .requestMatchers(HttpMethod.PUT, "/api/v1/orders/*").hasAuthority("SCOPE_order:update")
+                            .requestMatchers(HttpMethod.DELETE, "/api/v1/orders/*").hasAuthority("SCOPE_order:delete")
+                            .requestMatchers(HttpMethod.POST, "/api/v1/executions",
+                                    "/api/v1/executions/*/correct", "/api/v1/executions/*/cancel").access(executionAdmin)
                             .anyRequest().authenticated();
                 })
                 .oauth2ResourceServer(oauth2 -> oauth2

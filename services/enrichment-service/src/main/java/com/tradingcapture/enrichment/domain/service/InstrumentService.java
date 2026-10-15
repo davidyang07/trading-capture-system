@@ -92,6 +92,11 @@ public class InstrumentService {
                 command.instrumentType(), exchangeMic, currencyCode, now);
         applyIdentifiers(instrument, command.identifiers(), now);
         instruments.save(instrument);
+        // A lookup without an exchange (e.g. symbol XYZ) cached while one instrument matched is
+        // now ambiguous if this instrument shares the symbol on another exchange: drop it.
+        Set<String> keys = identifierCacheKeys(instrument);
+        keys.add(CacheKeys.instrument(instrument.getInstrumentId()));
+        evict(keys);
         metrics.referenceMutation();
         log.info("Instrument created: instrumentId={} exchange={} identifiers={}",
                 instrument.getInstrumentId(), exchangeMic, command.identifiers().size());

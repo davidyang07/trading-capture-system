@@ -99,6 +99,12 @@ Principal: **U-INV** = investor user, **U-ADM** = admin user, **M** = machine (s
 record is **404**. All service (non-`/internal`, non-actuator) paths also require the service
 audience — a wrong/missing audience is **401** before any scope check.
 
+Every mutation's scope/role rule is enforced twice: in the `SecurityConfig` URL rules, which run
+before the request body is read, and in the controller's `@PreAuthorize`. So a caller who may not
+call an endpoint gets **403** even when the body is invalid; only an authorized caller ever sees a
+**400** about the body. The two must agree; the `SecurityIntegrationTest`s check the 403-before-400
+order.
+
 ### trading-service (audience `trading-service`)
 
 | Method | Path | Principal | Scope | Role | Ownership | In public OpenAPI |
@@ -159,12 +165,19 @@ in its audience today (documented, intentional; a future inbound endpoint would 
 
 ## 6. Management / operational endpoints
 
-Actuator exposure is `health,info` only across all services (verified by test:
-`/actuator/env`, `/actuator/beans`, `/actuator/mappings` are **404** even to an admin token, and
-**401** to an anonymous caller because the security chain rejects non-public paths first). Health
-detail is not shown for anonymous callers. No env/config/bean/heap/thread/logger/shutdown endpoint
-is reachable. `/actuator/prometheus` exposes metrics without JWT business access and is restricted
-to in-namespace traffic by the Kubernetes NetworkPolicies.
+Actuator exposure is `health,info,prometheus` across all services; `/actuator/metrics` is not
+exposed (verified by test: `/actuator/env`, `/actuator/beans`, `/actuator/mappings` are **404** even
+to an admin token, and **401** to an anonymous caller because the security chain rejects non-public
+paths first). Health detail is not shown for anonymous callers. No env/config/bean/heap/thread/
+logger/shutdown endpoint is reachable.
+
+`/actuator/prometheus` is unauthenticated so Prometheus can scrape it. Deployed setups therefore
+serve actuator on a separate management port (`MANAGEMENT_SERVER_PORT`, the API port + 1000), set
+by the Kubernetes manifests and `docker-compose.full.yml`. That port is not exposed by the Kubernetes
+Service or published by compose, and the API port then serves no actuator path at all. Probes, the
+Docker `HEALTHCHECK` and the Prometheus scrape use the management port. Kubernetes additionally
+limits it to in-namespace traffic through the NetworkPolicies. A service run on a developer machine
+without the variable keeps actuator on its API port.
 
 ## 7. CORS / CSRF / sessions
 

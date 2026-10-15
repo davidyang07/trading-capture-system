@@ -21,7 +21,6 @@ import org.springframework.stereotype.Component;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
-import java.util.regex.Pattern;
 
 /**
  * Inbound FIX consumer with non-blocking retries: transient failures redeliver through
@@ -149,8 +148,6 @@ public class AllocationInstructionListener {
      * topic: anything else — control characters, log-forging payloads, values that would
      * overflow the VARCHAR(64) audit column — is replaced by a fresh UUID.
      */
-    private static final Pattern SAFE_CORRELATION_ID = Pattern.compile("[A-Za-z0-9._-]{1,64}");
-
     /** Correlation ID from the upstream header, or a fresh one when absent or unsafe. */
     static String correlationId(ConsumerRecord<String, String> record) {
         Header header = record.headers().lastHeader(EventHeaders.CORRELATION_ID);
@@ -158,9 +155,7 @@ public class AllocationInstructionListener {
             return UUID.randomUUID().toString();
         }
         String candidate = new String(header.value(), StandardCharsets.UTF_8);
-        return SAFE_CORRELATION_ID.matcher(candidate).matches()
-                ? candidate
-                : UUID.randomUUID().toString();
+        return CorrelationId.isSafe(candidate) ? candidate : UUID.randomUUID().toString();
     }
 
     /**

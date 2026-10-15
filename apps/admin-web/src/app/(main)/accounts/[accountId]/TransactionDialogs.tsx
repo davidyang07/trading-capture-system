@@ -10,6 +10,7 @@ import {
 } from "@/components/Form/fields";
 import { ErrorState } from "@/components/feedback/States";
 import { useToast } from "@/components/Toast/ToastProvider";
+import { useIdempotencyKey } from "@/hooks/useIdempotencyKey";
 import { useMutation } from "@/hooks/useMutation";
 import { postCashTransaction, postSecurityTransaction } from "@/api/accounts";
 import {
@@ -47,6 +48,11 @@ export function PostCashDialog({
   const mutation = useMutation((body: PostCashTransactionRequest) =>
     postCashTransaction(accountId, body)
   );
+  const idempotency = useIdempotencyKey();
+  const hide = () => {
+    idempotency.reset();
+    onHide();
+  };
 
   const onSubmit = async (values: CashValues) => {
     const body: PostCashTransactionRequest = {
@@ -58,11 +64,11 @@ export function PostCashDialog({
       description: values.description || undefined,
     };
     try {
-      await mutation.mutate(body);
+      await mutation.mutate({ ...body, idempotencyKey: idempotency.keyFor(body) });
       toast.successToast({ detail: "Cash transaction posted." });
       mutation.reset();
       onPosted();
-      onHide();
+      hide();
     } catch {
       /* surfaced in-dialog */
     }
@@ -72,7 +78,7 @@ export function PostCashDialog({
     <Dialog
       header="Post cash transaction"
       visible={visible}
-      onHide={onHide}
+      onHide={hide}
       style={{ width: "32rem", maxWidth: "95vw" }}
       dismissableMask
     >
@@ -154,6 +160,11 @@ export function PostSecurityDialog({
   const mutation = useMutation((body: PostSecurityTransactionRequest) =>
     postSecurityTransaction(accountId, body)
   );
+  const idempotency = useIdempotencyKey();
+  const hide = () => {
+    idempotency.reset();
+    onHide();
+  };
 
   const onSubmit = async (values: SecurityValues) => {
     const body: PostSecurityTransactionRequest = {
@@ -166,11 +177,11 @@ export function PostSecurityDialog({
       description: values.description || undefined,
     };
     try {
-      await mutation.mutate(body);
+      await mutation.mutate({ ...body, idempotencyKey: idempotency.keyFor(body) });
       toast.successToast({ detail: "Security transaction posted." });
       mutation.reset();
       onPosted();
-      onHide();
+      hide();
     } catch {
       /* surfaced in-dialog */
     }
@@ -180,7 +191,7 @@ export function PostSecurityDialog({
     <Dialog
       header="Post security transaction"
       visible={visible}
-      onHide={onHide}
+      onHide={hide}
       style={{ width: "32rem", maxWidth: "95vw" }}
       dismissableMask
     >

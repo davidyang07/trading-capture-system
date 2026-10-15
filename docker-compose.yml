@@ -2,6 +2,8 @@
 # Grows per phase: Kafka + Schema Registry arrived in Phase 6, Prometheus + Grafana in Phase 11,
 # application services once they have runnable features (Phase 3+).
 # All credentials below are documented local-development values only (see .env.example).
+# Ports publish on TCS_BIND_ADDRESS (default 127.0.0.1): loopback only unless you opt in, since the
+# credentials below are public.
 
 name: tcs
 
@@ -14,7 +16,7 @@ services:
     ports:
       # Host port defaults to 3307: many dev machines (including the project owner's)
       # run a local mysqld on 3306. Container port stays 3306.
-      - "${MYSQL_HOST_PORT:-3307}:3306"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:${MYSQL_HOST_PORT:-3307}:3306"
     volumes:
       - mysql-data:/var/lib/mysql
       - ./infrastructure/docker/mysql/init:/docker-entrypoint-initdb.d:ro
@@ -29,7 +31,7 @@ services:
     image: redis:7.4-alpine
     container_name: tcs-redis
     ports:
-      - "6379:6379"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -47,8 +49,8 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin_dev}
       KC_HTTP_PORT: "8180"
     ports:
-      - "8180:8180"
-      - "9000:9000" # management interface (health/metrics)
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:8180:8180"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:9000:9000" # management interface (health/metrics)
     volumes:
       # Mount the whole data dir (exists in the image with keycloak-user ownership);
       # mounting only data/h2 leaves a root-owned volume dir the non-root server cannot write.
@@ -89,7 +91,7 @@ services:
       # Topics are created explicitly (kafka-init / spring-kafka admin) — never implicitly.
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     ports:
-      - "${KAFKA_HOST_PORT:-9092}:9092"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:${KAFKA_HOST_PORT:-9092}:9092"
     healthcheck:
       test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:29092 > /dev/null 2>&1"]
       interval: 10s
@@ -146,7 +148,7 @@ services:
       # BACKWARD is also the registry default; pinned explicitly as the documented contract.
       SCHEMA_REGISTRY_SCHEMA_COMPATIBILITY_LEVEL: backward
     ports:
-      - "${SCHEMA_REGISTRY_HOST_PORT:-8085}:8081"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:${SCHEMA_REGISTRY_HOST_PORT:-8085}:8081"
     healthcheck:
       # cp images ship no curl/wget; probe the REST listener from bash.
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8081 && echo -e 'GET /subjects HTTP/1.1\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3 && head -1 <&3 | grep -q '200'"]
@@ -162,7 +164,7 @@ services:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.retention.time=6h"
     ports:
-      - "${PROMETHEUS_HOST_PORT:-9090}:9090"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:${PROMETHEUS_HOST_PORT:-9090}:9090"
     volumes:
       - ./infrastructure/observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
@@ -187,7 +189,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-grafana_admin_dev}
       GF_USERS_ALLOW_SIGN_UP: "false"
     ports:
-      - "${GRAFANA_HOST_PORT:-3001}:3000"
+      - "${TCS_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_HOST_PORT:-3001}:3000"
     volumes:
       - ./infrastructure/observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./infrastructure/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro

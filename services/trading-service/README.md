@@ -11,9 +11,10 @@ for the API contract of record; the domain and ownership rules are summarized be
   to `sub`) — never from the request body.
 - `status`, `cumQty`, `leavesQty` are server-derived from the order's active executions;
   status is a pure function of cumQty (0 → NEW, = quantity → FILLED, else PARTIALLY_FILLED).
-- Update and delete require status NEW. Delete additionally requires that no execution row
-  references the order — an order whose fills were all cancelled is NEW again but keeps its
-  audit history and therefore stays undeletable (backed by the DB `ON DELETE RESTRICT` FK).
+- Update and delete require status NEW and that no execution row references the order — an
+  order whose fills were all cancelled is NEW again but keeps its audit history, so it can be
+  neither edited nor deleted (`ORDER_HAS_EXECUTIONS`; delete is backed by the DB
+  `ON DELETE RESTRICT` FK).
 - Duplicate client-supplied order IDs are rejected (409); missing IDs are generated
   (`ORD-<uuid>`).
 
@@ -46,7 +47,7 @@ for the API contract of record; the domain and ownership rules are summarized be
 |---|---|---|
 | `POST /api/v1/orders` | `order:create` | any authenticated user; owner = JWT subject |
 | `GET /api/v1/orders`, `GET /api/v1/orders/{id}` | `order:read` | ADMIN/machine: all; INVESTOR: own only |
-| `PUT /api/v1/orders/{id}` | `order:update` | owner or ADMIN; NEW only |
+| `PUT /api/v1/orders/{id}` | `order:update` | owner or ADMIN; NEW + no executions |
 | `DELETE /api/v1/orders/{id}` | `order:delete` | owner or ADMIN; NEW + no executions |
 | `POST /api/v1/executions`, `/correct`, `/cancel` | `execution:write` | **+ role ADMIN** (operational function) |
 | `GET /api/v1/executions`, `/{id}` | `execution:read` | ADMIN/machine: all; INVESTOR: own orders only |

@@ -126,8 +126,9 @@ admin-web adds jest, Testing Library, jest-axe, and Playwright coverage.
 ```
 
 Infrastructure listens on MySQL `3307`, Redis `6379`, Keycloak `8180` (realm `tcs`), Kafka `9092`,
-and Schema Registry `8085`. Copy `.env.example` to `.env` to override any default; every credential
-in the repository is a labelled development placeholder.
+and Schema Registry `8085`, bound to `127.0.0.1` only (set `TCS_BIND_ADDRESS` to change that). Copy
+`.env.example` to `.env` to override any default; every credential in the repository is a labelled
+development placeholder.
 
 Run a service, then browse its OpenAPI UI at `/swagger-ui.html` and health probe at
 `/actuator/health`:

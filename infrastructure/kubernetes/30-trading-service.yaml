@@ -11,6 +11,8 @@ metadata:
     app.kubernetes.io/part-of: trading-capture-system
 data:
   SPRING_PROFILES_ACTIVE: "json-logs"
+  # Actuator (probes, Prometheus) on its own port, which the Service does not expose.
+  MANAGEMENT_SERVER_PORT: "9081"
   SERVICE_NAME: "trading-service"
   # No unauthenticated API contract from a deployed service; springdoc and its anonymous
   # security rule are both off (SecurityConfig reads springdoc.api-docs.enabled).
@@ -46,7 +48,7 @@ spec:
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/path: "/actuator/prometheus"
-        prometheus.io/port: "8081"
+        prometheus.io/port: "9081"
     spec:
       serviceAccountName: tcs-app
       automountServiceAccountToken: false
@@ -64,6 +66,8 @@ spec:
           ports:
             - name: http
               containerPort: 8081
+            - name: management
+              containerPort: 9081
           envFrom:
             - configMapRef:
                 name: tcs-common-config
@@ -83,19 +87,19 @@ spec:
           startupProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
             periodSeconds: 5
             failureThreshold: 30
           readinessProbe:
             httpGet:
               path: /actuator/health/readiness
-              port: http
+              port: management
             periodSeconds: 10
             failureThreshold: 3
           livenessProbe:
             httpGet:
               path: /actuator/health/liveness
-              port: http
+              port: management
             periodSeconds: 10
             failureThreshold: 3
           resources:

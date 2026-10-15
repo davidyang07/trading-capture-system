@@ -140,6 +140,19 @@ class OrderServiceTest {
     }
 
     @Test
+    void updateRejectsOrdersWithExecutionHistoryEvenWhenNew() {
+        // A fully cancelled order is NEW again; editing it would rewrite what its history describes.
+        Order order = TradingFixtures.order("ORD-1", "investor1", "100");
+        when(orders.findById("ORD-1")).thenReturn(Optional.of(order));
+        when(executions.existsByOrderOrderId("ORD-1")).thenReturn(true);
+
+        assertThatThrownBy(() -> service.update(TradingFixtures.investor("investor1"), "ORD-1", updateCommand("200")))
+                .isInstanceOfSatisfying(BusinessRuleException.class,
+                        ex -> assertThat(ex.errorCode()).isEqualTo(ErrorCode.ORDER_HAS_EXECUTIONS));
+        assertThat(order.getQuantity()).isEqualByComparingTo("100");
+    }
+
+    @Test
     void updateAppliesFieldsWhileNew() {
         Order order = TradingFixtures.order("ORD-1", "investor1", "100");
         when(orders.findById("ORD-1")).thenReturn(Optional.of(order));

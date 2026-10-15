@@ -189,6 +189,9 @@ class ExecutionServiceTest {
         assertThat(correction.getLeavesQty()).isEqualByComparingTo("50");
         assertThat(correction.getOrdStatus()).isEqualTo(OrderStatus.PARTIALLY_FILLED);
         assertThat(order.getCumQty()).isEqualByComparingTo("50");
+        // same trade: the original trade date, not the day the correction was booked
+        assertThat(correction.getTradeDate()).isEqualTo(target.getTradeDate());
+        assertThat(correction.getTransactTime()).isEqualTo(TradingFixtures.FIXED_NOW);
         // the historical target row is untouched
         assertThat(target.getLastQty()).isEqualByComparingTo("60");
         assertThat(target.getExecType()).isEqualTo(ExecutionType.TRADE);
